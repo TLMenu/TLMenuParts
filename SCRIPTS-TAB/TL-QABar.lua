@@ -583,11 +583,9 @@ local function _qaBindTargetRespawn()
             end
 
             local _rbKey = _qaToBB[key] or key
-            if _rbKey:sub(1, 3) == "bb_" then
-                if type(_qb.startBB) == "function" then
-                    pcall(function() _qb.startBB(target, _rbKey) end)
-                end
-            elseif _G.TLActions and type(_G.TLActions.start) == "function" then
+            if _rbKey:sub(1, 3) == "bb_" and type(_qb.startBB) == "function" then
+                pcall(function() _qb.startBB(target, _rbKey) end)
+            elseif _G.TLActions and type(_G.TLActions) == "table" and type(_G.TLActions.start) == "function" then
                 pcall(function() _G.TLActions.start(key, target) end)
             end
 
@@ -656,20 +654,15 @@ _qb.activateQAAction = function(key, forcedTarget)
         local bbKey = _qaToBB[_capturedKey] or _capturedKey
 
         local ok, err = xpcall(function()
-            if bbKey:sub(1, 3) == "bb_" then
-                if type(_qb.startBB) == "function" then
-                    _qb.startBB(_capturedTarget, bbKey)
-                else
-                    warn("[QA] Error: _qb.startBB is not a function! (Type: " ..
-                        type(_qb.startBB) .. ")")
-                end
-            elseif _G.TLActions then
-                if type(_G.TLActions) == "table" and type(_G.TLActions.start) == "function" then
-                    _G.TLActions.start(_capturedKey, _capturedTarget)
-                else
-                    warn("[QA] Error: _G.TLActions.start is not a function! (Type: " ..
-                        type(_G.TLActions.start) .. ")")
-                end
+            if bbKey:sub(1, 3) == "bb_" and type(_qb.startBB) == "function" then
+                _qb.startBB(_capturedTarget, bbKey)
+            elseif _G.TLActions and type(_G.TLActions) == "table" and type(_G.TLActions.start) == "function" then
+                _G.TLActions.start(_capturedKey, _capturedTarget)
+            else
+                warn("[QA] No dispatcher available for key: " .. tostring(_capturedKey) ..
+                    " (bbKey: " .. tostring(bbKey) ..
+                    ", startBB type: " .. type(_qb.startBB) ..
+                    ", TLActions type: " .. type(_G.TLActions) .. ")")
             end
         end, function(e)
             warn("[QA] Runtime Error in activateQAAction callback:", tostring(e))
