@@ -852,7 +852,10 @@ function API.start()
 
             
             local curY = 0
-            local _qaGlobalLock = false
+            local _qaLastGlobalClick = 0
+            local _qaCardLastClick = {}
+            local _QA_GLOBAL_COOLDOWN = 0.35
+            local _QA_CARD_COOLDOWN = 0.7
             local _isMobile = _isMob or _isTab
             local twP = _qb.twP
 
@@ -919,14 +922,14 @@ function API.start()
                         twP(bg, .1, { BackgroundColor3 = P.card })
                         _qaSetCardStroke(stroke, 0.65, 1.2)
                     end)
-                    local _cardLock = false
                     local function qaCardActivate()
                         local ok, err = xpcall(function()
-                            if _qaGlobalLock or _cardLock then return end
-                            _qaGlobalLock = true
-                            _cardLock     = true
-                            task.delay(0.35, function() _qaGlobalLock = false end)
-                            task.delay(0.7, function() _cardLock = false end)
+                            local now = tick()
+                            if now - _qaLastGlobalClick < _QA_GLOBAL_COOLDOWN then return end
+                            local lastClick = _qaCardLastClick[act.key] or 0
+                            if now - lastClick < _QA_CARD_COOLDOWN then return end
+                            _qaLastGlobalClick = now
+                            _qaCardLastClick[act.key] = now
                             local wasActive = (_qb.qaActiveKey == act.key)
                             _qb.resetAllCards()
                             if wasActive then
@@ -938,9 +941,9 @@ function API.start()
                             else
                                 local ok = _qb.activateQAAction(act.key)
                                 if ok ~= false then
-                                    twP(bg, .12, { BackgroundColor3 = P.cardHov })
-                                    twP(lbl, .12, { TextColor3 = P.lblOn })
-                                    twP(bar, .12, { BackgroundTransparency = 0 })
+                                    pcall(function() if P.cardHov then twP(bg, .12, { BackgroundColor3 = P.cardHov }) end end)
+                                    pcall(function() if P.lblOn then twP(lbl, .12, { TextColor3 = P.lblOn }) end end)
+                                    pcall(function() twP(bar, .12, { BackgroundTransparency = 0 }) end)
                                     _qaSetCardStroke(stroke, 0.08, 1.8)
                                     task.spawn(function()
                                         task.wait(0.2); pcall(function()
@@ -968,7 +971,9 @@ function API.start()
                     end
                     btn.MouseButton1Click:Connect(qaCardActivate)
                     btn.InputBegan:Connect(function(inp)
-                        if inp.UserInputType == Enum.UserInputType.Touch then qaCardActivate() end
+                        if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then
+                            qaCardActivate()
+                        end
                     end)
                     if act.key == "sucking" then
                         local function qaSuckPause()
@@ -984,10 +989,10 @@ function API.start()
                         btn.MouseButton1Down:Connect(qaSuckPause)
                         btn.MouseButton1Up:Connect(qaSuckResume)
                         btn.InputBegan:Connect(function(inp)
-                            if inp.UserInputType == Enum.UserInputType.Touch then qaSuckPause() end
+                            if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then qaSuckPause() end
                         end)
                         btn.InputEnded:Connect(function(inp)
-                            if inp.UserInputType == Enum.UserInputType.Touch then qaSuckResume() end
+                            if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then qaSuckResume() end
                         end)
                     end
                 end
@@ -1086,7 +1091,7 @@ function API.start()
             end
             stopBtn.MouseButton1Click:Connect(_qb.qaDoStop)
             stopBtn.InputBegan:Connect(function(inp)
-                if inp.UserInputType == Enum.UserInputType.Touch then _qb.qaDoStop() end
+                if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then _qb.qaDoStop() end
             end)
 
             
@@ -1126,17 +1131,17 @@ function API.start()
             _TL_refs._TL_closeQABar = _qb.closeQABar
 
             
-            _qb._tlHitboxLock = false
+            _qb._tlHitboxLastClick = 0
             _qb.tlHitboxActivate = function()
-                if _qb._tlHitboxLock then return end
-                _qb._tlHitboxLock = true
-                task.delay(0.3, function() _qb._tlHitboxLock = false end)
+                local now = tick()
+                if now - _qb._tlHitboxLastClick < 0.3 then return end
+                _qb._tlHitboxLastClick = now
                 if _qb.qaBarOpen then _qb.closeQABar() else _qb.openQABar() end
             end
             if _qb.tlHitbox then
                 _qb.tlHitbox.MouseButton1Click:Connect(_qb.tlHitboxActivate)
                 _qb.tlHitbox.InputBegan:Connect(function(inp)
-                    if inp.UserInputType == Enum.UserInputType.Touch then _qb.tlHitboxActivate() end
+                    if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then _qb.tlHitboxActivate() end
                 end)
                 _qb.tlHitbox.MouseEnter:Connect(function()
                     pcall(function() if type(_qb._sc._playHoverSound) == "function" then _qb._sc._playHoverSound() end end)
