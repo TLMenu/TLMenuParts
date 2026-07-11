@@ -1,17 +1,7 @@
-
-
-
 local RUNTIME_KEY = "__TL_QABarRuntime"
-
-
 local _qb            = {}   
 local _initialized   = false
 local _started       = false
-
-
-
-
-
 
 local P = setmetatable({}, {
     __index = function(_, k)
@@ -21,13 +11,6 @@ local P = setmetatable({}, {
             _P_STOP_BRD = Color3.fromRGB(180, 45, 45),
             _P_STOP_TXT = Color3.fromRGB(224, 72, 72),
         }
-        
-        
-        
-        
-        
-        
-        
         
         local literals = {
             stopBg  = stops._P_STOP_BG,
@@ -63,18 +46,9 @@ local P = setmetatable({}, {
         return nil
     end,
 })
-
-
 local API = {}
 
 function API.init(deps)
-    
-    
-    
-    
-    
-    
-    
     do
         local _genvC = deps._genv or (getgenv and getgenv()) or {}
         _qb.C = deps.C or _genvC.C or _G.C or _qb.C
@@ -144,8 +118,6 @@ function API.init(deps)
     _qb.SEC_H           = 20
     _qb.FOOT_H          = 30
     _qb.SCROLL_MAX      = 320
-
-    
     _qb._panelColorHooks = deps._panelColorHooks or {}
     _qb._makeRealStroke  = deps._makeRealStroke or function(p, t, c, a)
         local s = Instance.new("UIStroke", p)
@@ -174,15 +146,14 @@ function API.init(deps)
     _qb._AF              = deps._AF or _qb.AF
     _qb.stopQA74         = deps.stopQA74 or function() end
     _qb._registerResetFn = deps.registerResetFn or function() end
-
-    
     _qb.tlArrow    = _qb.tlArrow or _qb.g._TL_tlArrow
     _qb.tlArrowBig = _qb.tlArrowBig or _qb.g._TL_tlArrowBig
 end
 
 local QA_CATS = {
-    {
-        label = "Freaky",
+{
+
+label = "Freaky",
         col = Color3.fromRGB(255, 80, 160),
         actions = {
             { key = "licking",     label = "Licking",      imageId = "rbxassetid://72579312094126" },
@@ -246,7 +217,6 @@ for _, cat in ipairs(QA_CATS) do
 end
 
 local QA_CARD_STROKE = Color3.new(1, 1, 1)
-
 local function _qaSetCardStroke(st, alpha, thick)
     if not st then return end
     st.Enabled = true
