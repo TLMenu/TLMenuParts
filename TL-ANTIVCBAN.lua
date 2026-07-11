@@ -1,3 +1,7 @@
+
+
+
+
 local GLOBAL_ENV = (typeof(getgenv) == "function" and getgenv()) or _G
 local RUNTIME_KEY = "__TL_AntiVCBAN_Runtime"
 
@@ -165,36 +169,6 @@ local function _vc_applyIconState(muted)
 end
 
 
-local _vc_VOICE_REJOIN_GAP = 0.5
-local _vc_FLUSH_ON_UNMUTE  = true
-local _vc_FLUSH_MIN_MUTE   = 8
-local _vc_mutedAt          = 0
-local _vc_flushing         = false
-local function _vc_flushVoicePipeline()
-    if _vc_flushing then return end
-    _vc_flushing = true
-    task.spawn(function()
-        pcall(function() VoiceChatService:leaveVoice() end)
-        task.wait(_vc_VOICE_REJOIN_GAP)
-        if not _vc_desiredMuted then
-            pcall(function() VoiceChatService:joinVoice() end)
-            for _ = 1, 12 do
-                task.wait(0.1)
-                if _vc_desiredMuted then break end
-                local live = false
-                pcall(function()
-                    if VoiceInternal and VoiceInternal.PublishPause then VoiceInternal:PublishPause(false) end
-                    if VoiceInternal and VoiceInternal.IsPublishPaused then live = (VoiceInternal:IsPublishPaused() == false) end
-                end)
-                if live then break end
-            end
-            pcall(_vc_manageConnections)
-        end
-        _vc_flushing = false
-    end)
-end
-
-
 local function _vc_toggleMute()
     local adi = _vc_getADI()
     local currentMuted = false
@@ -207,7 +181,6 @@ local function _vc_toggleMute()
     local newState = not currentMuted
     _vc_desiredMuted = newState
     _vc_lastToggleAt = tick()
-    if newState then _vc_mutedAt = tick() end
     _vc_applyIconState(newState)
 
     local function applyMutedState()
@@ -247,18 +220,9 @@ local function _vc_toggleMute()
                 if speaker then speaker:SetMuted(newState) end
             end
         end)
-        pcall(function()
-            if VoiceInternal and VoiceInternal.PublishPause then
-                VoiceInternal:PublishPause(newState and true or false)
-            end
-        end)
     end
 
     applyMutedState()
-    if (not newState) and _vc_FLUSH_ON_UNMUTE and _vc_mutedAt > 0
-        and (tick() - _vc_mutedAt) >= _vc_FLUSH_MIN_MUTE then
-        _vc_flushVoicePipeline()
-    end
     task.delay(0.10, applyMutedState)
     task.delay(0.35, applyMutedState)
     task.delay(0.55, function()
@@ -392,8 +356,8 @@ end
 local function _vc_downloadIcons()
     if not isfolder("assets") then safeMakeFolder("assets") end
     local urls = {
-        { "https://raw.githubusercontent.com/telelumi/TLASSETS/refs/heads/main/Icons/ANTIVCBAN-Unmuted-Icon.png", "assets/TL_Unmuted.png", "unmuted" },
-        { "https://raw.githubusercontent.com/telelumi/TLASSETS/refs/heads/main/Icons/ANTIVCBAN-Mute-Icon.png", "assets/TL_Muted.png", "muted" },
+        { "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/Icons/ANTIVCBAN-Unmuted-Icon.png", "assets/TL_Unmuted.png", "unmuted" },
+        { "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/Icons/ANTIVCBAN-Mute-Icon.png", "assets/TL_Muted.png", "muted" },
     }
     for _, entry in pairs(urls) do
         task.spawn(function()
@@ -562,7 +526,5 @@ end
 if GLOBAL_ENV then
     GLOBAL_ENV.__TL_AntiVCBAN = API
 end
-
-task.spawn(function() API.start() end)
 
 return API
