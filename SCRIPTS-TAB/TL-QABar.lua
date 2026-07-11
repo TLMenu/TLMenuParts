@@ -82,6 +82,7 @@ function API.init(deps)
     _qb.act_stopFollow  = _TL_refs._TL_act_stopFollow or _genv._TL_act_stopFollow
     _qb.stopBB          = _TL_refs._TL_stopBB or _genv._TL_stopBB
     _qb.startBB         = _TL_refs._TL_startBB or _genv._TL_startBB
+    _qb.qaDispatch      = _TL_refs._TL_qaDispatch
     _qb.stopGhost       = _TL_refs._TL_stopGhost or _genv._TL_stopGhost
     _qb.stopSitOnHead   = _TL_refs._TL_stopSitOnHead or _genv._TL_stopSitOnHead
     _qb.stopPiggyback   = _TL_refs._TL_stopPiggyback or _genv._TL_stopPiggyback
@@ -447,11 +448,6 @@ _qb.stopQAAction = function(keepRespawn)
             _qb.qaTargetWatchConn = nil
         end
     end
-    if _G.TLActionsStop then
-        pcall(_G.TLActionsStop)
-    elseif _G.TLActions then
-        pcall(function() _G.TLActions.stopAll() end)
-    end
     pcall(function()
         local _af = _qb.AF or {}
         if _qb.act_following then
@@ -585,8 +581,8 @@ local function _qaBindTargetRespawn()
             local _rbKey = _qaToBB[key] or key
             if _rbKey:sub(1, 3) == "bb_" and type(_qb.startBB) == "function" then
                 pcall(function() _qb.startBB(target, _rbKey) end)
-            elseif _G.TLActions and type(_G.TLActions) == "table" and type(_G.TLActions.start) == "function" then
-                pcall(function() _G.TLActions.start(key, target) end)
+            elseif type(_qb.qaDispatch) == "function" then
+                pcall(function() _qb.qaDispatch(key, target) end)
             end
 
             lastChar = target.Character
@@ -656,13 +652,13 @@ _qb.activateQAAction = function(key, forcedTarget)
         local ok, err = xpcall(function()
             if bbKey:sub(1, 3) == "bb_" and type(_qb.startBB) == "function" then
                 _qb.startBB(_capturedTarget, bbKey)
-            elseif _G.TLActions and type(_G.TLActions) == "table" and type(_G.TLActions.start) == "function" then
-                _G.TLActions.start(_capturedKey, _capturedTarget)
+            elseif type(_qb.qaDispatch) == "function" then
+                _qb.qaDispatch(_capturedKey, _capturedTarget)
             else
                 warn("[QA] No dispatcher available for key: " .. tostring(_capturedKey) ..
                     " (bbKey: " .. tostring(bbKey) ..
                     ", startBB type: " .. type(_qb.startBB) ..
-                    ", TLActions type: " .. type(_G.TLActions) .. ")")
+                    ", qaDispatch type: " .. type(_qb.qaDispatch) .. ")")
             end
         end, function(e)
             warn("[QA] Runtime Error in activateQAAction callback:", tostring(e))
