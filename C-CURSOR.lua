@@ -1,6 +1,13 @@
 local M = {}
 local _cfg = {}
 
+local function _ds(p)
+    if not p then return Instance.new("UIStroke") end
+    local ok, s = pcall(function() return _cfg._makeDummyStroke and _cfg._makeDummyStroke(p) end)
+    if ok and s then return s end
+    local s = Instance.new("UIStroke"); s.Thickness = 1; s.Parent = p; return s
+end
+
 local _mfloor, _mrandom, _mcos, _msin = math.floor, math.random, math.cos, math.sin
 local _mmax, _mmin, _mpi = math.max, math.min, math.pi
 
@@ -450,7 +457,7 @@ local function _makeVslider(label, sublabel, vMin, vMax, vDef, col, onSlide)
     local card = Instance.new("Frame", visualSettingsPage); card.Size = UDim2.new(1, 0, 0, CARD_H_V); card.Position =
     UDim2.new(0, 0, 0, _vpY); card.BackgroundColor3 = Color3.fromRGB(255, 255, 255); card.BackgroundTransparency = 0.94; card.BorderSizePixel = 0; _cfg.corner(
     card, 14)
-    local cStr = _cfg._makeDummyStroke(card); cStr.Thickness = 1; cStr.Color = _cfg.C.bg3; cStr.Transparency = 0.3
+    local cStr = _ds(card); cStr.Thickness = 1; cStr.Color = _cfg.C.bg3; cStr.Transparency = 0.3
     local cdot = Instance.new("Frame", card); cdot.Size = UDim2.new(0, 3, 0, CARD_H_V - 20); cdot.Visible = false; cdot.Position =
     UDim2.new(0, 0, 0.5, -(CARD_H_V - 20) / 2); cdot.BackgroundColor3 = col; cdot.BackgroundTransparency = 0.4; cdot.BorderSizePixel = 0; _cfg.corner(
     cdot, 99)
@@ -473,7 +480,7 @@ local function _makeVslider(label, sublabel, vMin, vMax, vDef, col, onSlide)
     local knob = Instance.new("Frame", track); knob.Size = UDim2.new(0, 12, 0, 12); knob.BackgroundColor3 =
     _cfg._C3_WHITE; knob.BackgroundTransparency = 0; knob.BorderSizePixel = 0; knob.ZIndex = 5; _cfg.corner(
     knob, 99)
-    local kStr = _cfg._makeDummyStroke(knob); kStr.Thickness = 1.5; kStr.Color = col; kStr.Transparency = 0
+    local kStr = _ds(knob); kStr.Thickness = 1.5; kStr.Color = col; kStr.Transparency = 0
     local function applyRatio(r)
         r = math.clamp(r, 0, 1); local v = vMin + r * (vMax - vMin)
         fill.Size = UDim2.new(r, 0, 1, 0); knob.Position = UDim2.new(r, -6, 0.5, -6)
@@ -503,7 +510,7 @@ local function _makeVtoggle(label, sublabel, col, initOn, onToggle)
     local card = Instance.new("Frame", visualSettingsPage); card.Size = UDim2.new(1, 0, 0, ROW_H); card.Position =
     UDim2.new(0, 0, 0, _vpY); card.BackgroundColor3 = Color3.fromRGB(255, 255, 255); card.BackgroundTransparency = 0.94; card.BorderSizePixel = 0; _cfg.corner(
     card, 14)
-    local cStr = _cfg._makeDummyStroke(card); cStr.Thickness = 1; cStr.Color = _cfg.C.bg3; cStr.Transparency = 0.3
+    local cStr = _ds(card); cStr.Thickness = 1; cStr.Color = _cfg.C.bg3; cStr.Transparency = 0.3
     local cdot = Instance.new("Frame", card); cdot.Size = UDim2.new(0, 3, 0, ROW_H - 16); cdot.Visible = false; cdot.Position =
     UDim2.new(0, 0, 0.5, -(ROW_H - 16) / 2); cdot.BackgroundColor3 = col; cdot.BackgroundTransparency = 0.4; cdot.BorderSizePixel = 0; _cfg.corner(
     cdot, 99)
@@ -589,7 +596,7 @@ local function _makeChipRow(sectionLabel, items, onSelect, getActive)
         local chip = Instance.new("Frame", wrap); chip.Size = UDim2.new(0, CHIP_W, 0, CHIP_H); chip.Position =
         UDim2.new(0, xOff, 0, yOff); chip.BackgroundColor3 = Color3.fromRGB(255, 255, 255); chip.BackgroundTransparency = 0.94; chip.BorderSizePixel = 0; _cfg.corner(
         chip, 14)
-        local cStr = _cfg._makeDummyStroke(chip); cStr.Thickness = 1.5; cStr.Color = _cfg.C.bg3; cStr.Transparency = 0.65; cStr.ApplyStrokeMode =
+        local cStr = _ds(chip); cStr.Thickness = 1.5; cStr.Color = _cfg.C.bg3; cStr.Transparency = 0.65; cStr.ApplyStrokeMode =
         Enum.ApplyStrokeMode.Border
         local lbl = Instance.new("TextLabel", chip); lbl.Size = UDim2.new(1, -4, 0, 16); lbl.Position =
         UDim2.new(0, 2, 0, 10); lbl.BackgroundTransparency = 1; lbl.Text = item.label; lbl.Font =
@@ -788,7 +795,7 @@ function M.buildSettingsUI(parentPage, extraCfg)
                     f.Position = UDim2.new(0, col * (CHIP_W) + 2, 0, 2)
                     f.BackgroundColor3 = item.color
                     f.BackgroundTransparency = 0.5; f.BorderSizePixel = 0; _cfg.corner(f, 6)
-                    local fs = _cfg._makeDummyStroke(f)
+                    local fs = _ds(f)
                     fs.Thickness = 1.5; fs.Color = item.color; fs.Transparency = 0.7
                     fs.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
                     local fl = Instance.new("TextLabel", f)

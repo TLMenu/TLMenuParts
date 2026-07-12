@@ -2,6 +2,13 @@ local M = {}
 local _cfg = {}
 local _TL_WIDGET_CLOSE_ICON = "rbxassetid://111119570195816"
 
+local function _ds(p)
+    if not p then return Instance.new("UIStroke") end
+    local ok, s = pcall(function() return _cfg._makeDummyStroke and _cfg._makeDummyStroke(p) end)
+    if ok and s then return s end
+    local s = Instance.new("UIStroke"); s.Thickness = 1; s.Parent = p; return s
+end
+
 function M.init(cfg)
     _cfg = cfg or {}
 end
@@ -10,7 +17,6 @@ function M.makeWidgetOpenBtn(parent, xPos, yPos, label, callback)
     local C = _cfg.C or _G.C or {}
     local _C3_WHITE = _cfg._C3_WHITE or Color3.fromRGB(255, 255, 255)
     local corner = _cfg.corner or function() end
-    local _makeDummyStroke = _cfg._makeDummyStroke or function() end
     local twP = _cfg.twP or _cfg.tw or function() end
     local _sc = _cfg._sc or {}
 
@@ -22,7 +28,7 @@ function M.makeWidgetOpenBtn(parent, xPos, yPos, label, callback)
     wrap.BorderSizePixel = 0
     wrap.ZIndex = 8
     corner(wrap, 8)
-    local str = _makeDummyStroke(wrap)
+    local str = _ds(wrap)
     str.Thickness = 1.2; str.Color = C.accent; str.Transparency = 0.5
     local ico = Instance.new("TextLabel", wrap)
     ico.Size = UDim2.new(0, 20, 1, 0); ico.Position = UDim2.new(0, 6, 0, 0)
@@ -63,7 +69,6 @@ function M.createScriptWidget(scriptName, accentCol, onToggleFn, initState, extr
     local MGLOW = _cfg.MGLOW or _C3_WHITE
     local corner = _cfg.corner or function() end
     local stroke = _cfg.stroke or function() end
-    local _makeDummyStroke = _cfg._makeDummyStroke or function() end
     local tw = _cfg.tw or function() end
     local twP = _cfg.twP or tw
     local getNearestPlayer = _cfg.getNearestPlayer or function() end
@@ -141,7 +146,7 @@ function M.createScriptWidget(scriptName, accentCol, onToggleFn, initState, extr
     local stPill = Instance.new("Frame", body)
     stPill.Size = UDim2.new(1, -24, 0, 32); stPill.Position = UDim2.new(0, 12, 0, 10)
     stPill.BackgroundColor3 = C.bg2; stPill.BackgroundTransparency = 0.4; corner(stPill, 8)
-    local st_Stroke = _makeDummyStroke(stPill); st_Stroke.Thickness = 1; st_Stroke.Color = acDim; st_Stroke.Transparency = 0.6
+    local st_Stroke = _ds(stPill); st_Stroke.Thickness = 1; st_Stroke.Color = acDim; st_Stroke.Transparency = 0.6
     local stLbl = Instance.new("TextLabel", stPill)
     stLbl.Size = UDim2.new(1, -60, 1, 0); stLbl.Position = UDim2.new(0, 12, 0, 0)
     stLbl.BackgroundTransparency = 1; stLbl.Text = initState and "ACTIVE" or "INACTIVE"
