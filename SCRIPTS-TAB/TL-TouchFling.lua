@@ -129,4 +129,12 @@ function M.isActive()
     return _active
 end
 
+function M.getSpeed()
+    return _speed
+end
+
+function M.setSpeed(s)
+    _speed = s
+end
+
 return M
