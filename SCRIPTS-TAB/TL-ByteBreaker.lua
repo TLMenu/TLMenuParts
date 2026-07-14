@@ -1,11 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════════════
---  TLEX ByteBreaker V3.1 — Kinematic-Sync Architecture
---  • PID-Controller CFrame Locking
---  • LinearVelocity Physics Stack
---  • Kinematic Target Projection (Look-Ahead)
---  • Collision Group Isolation
---  • Adaptive Animation Speed Matching
---  • PhysicsRepRootPart every 2nd frame
+--  TLEX ByteBreaker V3.2 — Kinematic-Sync + Jump/Fly/Rotation Fix
 -- ════════════════════════════════════════════════════════════════════════════
 
 local M = {}
@@ -47,8 +41,23 @@ local CFG = {
     ANIM_SPEED_SMOOTH        = 0.08,
 
     COLLISION_GROUP_NAME     = "BBAttach_V3",
+    PHYSREP_EVERY_N_FRAMES   = 1,
 
-    PHYSREP_EVERY_N_FRAMES   = 1, -- jeden 2. Frame
+    -- Kinematic Sync (neue Methode)
+    KS_DEADZONE              = 0.006,
+    KS_SNAP_DIST             = 6,
+    KS_STOP_VEL_XZ           = 0.8,
+    KS_STOP_VEL_Y            = 1.2,
+    KS_STOP_FRAMES           = 3,
+    KS_ROT_STOP_THRESHOLD    = 0.3,
+    KS_ROT_STOP_FRAMES       = 3,
+    KS_FLY_VEL_Y_MIN         = 4,
+    KS_FLY_FRAMES_REQ        = 8,
+    KS_FLY_SPEED_THRESHOLD   = 20,
+    KS_JUMP_VEL_Y            = 8,
+    KS_JUMP_Y_DELTA          = 0.5,
+    KS_JUMP_COOLDOWN         = 0.3,
+    KS_LV_RESIDUAL           = 8,
 
     HARD_ATTACH_MODES        = {
         bb_carry         = true,
@@ -145,6 +154,7 @@ local State = {
     physAttachment      = nil,
     linearVelocity      = nil,
     alignOrientation    = nil,
+    bodyVelocity        = nil,
 
     connections         = {},
     animTracks          = {},
@@ -175,9 +185,15 @@ local State = {
         stopFrames        = 0,
     },
 
-    lookahead = {
-        lastTargetVel = Vector3.zero,
-        lastTargetPos = Vector3.zero,
+    -- Kinematic Sync per-mode state
+    ks = {
+        stopFramesXZ  = 0,
+        stopFramesY   = 0,
+        rotStopFrames = 0,
+        flyFrames     = 0,
+        initialized   = false,
+        lastTargetY   = 0,
+        jumpCooldown  = 0,
     },
 }
 
@@ -229,13 +245,26 @@ local function clearVelocity(hrp)
     end, "clearVelocity")
 end
 
+local function resetKS()
+    State.ks.stopFramesXZ  = 0
+    State.ks.stopFramesY   = 0
+    State.ks.rotStopFrames = 0
+    State.ks.flyFrames     = 0
+    State.ks.initialized   = false
+    State.ks.lastTargetY   = 0
+    State.ks.jumpCooldown  = 0
+end
+
 -- ════════════════════════════════════════════════════════════════════════════
---  SÄULE 1: LINEARVELOCITY PHYSICS STACK
+--  PHYSICS STACK
 -- ════════════════════════════════════════════════════════════════════════════
 
 local function buildPhysicsStack(hrp)
     if State.physAttachment then
         pcall(function() State.physAttachment:Destroy() end)
+    end
+    if State.bodyVelocity then
+        pcall(function() State.bodyVelocity:Destroy() end)
     end
 
     local att = Instance.new("Attachment")
@@ -243,29 +272,41 @@ local function buildPhysicsStack(hrp)
     att.Parent = hrp
     State.physAttachment = att
 
+    -- BodyVelocity: full-axis gravity cancel
+    local bv = Instance.new("BodyVelocity")
+    bv.Name      = "BBBodyVel"
+    bv.MaxForce  = Vector3.new(1e6, 1e6, 1e6)
+    bv.Velocity  = Vector3.zero
+    bv.P         = 1e4
+    bv.Parent    = hrp
+    State.bodyVelocity = bv
+
+    -- LinearVelocity: residual correction
     local lv = Instance.new("LinearVelocity")
     lv.Name                   = "BBLinearVel"
     lv.Attachment0            = att
     lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
-    lv.MaxForce               = CFG.PID_MAX_FORCE
+    lv.MaxForce               = 1e6
     lv.RelativeTo             = Enum.ActuatorRelativeTo.World
     lv.VectorVelocity         = Vector3.zero
     lv.Parent                 = hrp
     State.linearVelocity      = lv
 
+    -- AlignOrientation: sole rotation owner, non-rigid for smooth rotation
     local ao = Instance.new("AlignOrientation")
-    ao.Name                = "BBAlignOri"
-    ao.Attachment0         = att
-    ao.MaxTorque           = CFG.PID_MAX_FORCE
-    ao.MaxAngularVelocity  = 100
-    ao.Responsiveness      = 200
-    ao.RigidityEnabled     = true
-    ao.Parent              = hrp
+    ao.Name               = "BBAlignOri"
+    ao.Attachment0        = att
+    ao.Mode               = Enum.OrientationAlignmentMode.OneAttachment
+    ao.MaxTorque          = 1e6
+    ao.MaxAngularVelocity = 1000
+    ao.Responsiveness     = 500
+    ao.RigidityEnabled    = false
+    ao.Parent             = hrp
     State.alignOrientation = ao
 end
 
 local function destroyPhysicsStack()
-    for _, key in ipairs({ "physAttachment", "linearVelocity", "alignOrientation" }) do
+    for _, key in ipairs({ "physAttachment", "linearVelocity", "alignOrientation", "bodyVelocity" }) do
         if State[key] then
             pcall(function() State[key]:Destroy() end)
             State[key] = nil
@@ -274,7 +315,7 @@ local function destroyPhysicsStack()
 end
 
 -- ════════════════════════════════════════════════════════════════════════════
---  SÄULE 2: PID-CONTROLLER
+--  PID CONTROLLER
 -- ════════════════════════════════════════════════════════════════════════════
 
 local PID = {}
@@ -287,61 +328,46 @@ end
 
 function PID.compute(current, desired, dt)
     if dt <= 0 then return Vector3.zero end
-
     local err = desired - current
-
     if err.Magnitude < CFG.PID_POSITION_DEADZONE then
         State.pid.integral  = Vector3.zero
         State.pid.lastError = Vector3.zero
         return Vector3.zero
     end
-
     local p = err * CFG.PID_KP
-
     State.pid.integral = State.pid.integral + err * dt
     if State.pid.integral.Magnitude > 10 then
         State.pid.integral = State.pid.integral.Unit * 10
     end
     local i = State.pid.integral * CFG.PID_KI
-
     local d = ((err - State.pid.lastError) / dt) * CFG.PID_KD
     State.pid.lastError = err
-
     local output = p + i + d
     if output.Magnitude > CFG.PID_MAX_FORCE then
         output = output.Unit * CFG.PID_MAX_FORCE
     end
-
     return output
 end
 
 -- ════════════════════════════════════════════════════════════════════════════
---  SÄULE 3: LOOK-AHEAD PROJECTION
+--  LOOK-AHEAD PROJECTION
 -- ════════════════════════════════════════════════════════════════════════════
 
 local function getLookAheadCF(baseCF, dt)
     local tHRP = State.targetHRP
     if not tHRP then return baseCF end
-
     local vel   = tHRP.AssemblyLinearVelocity
     local speed = vel.Magnitude
-
-    if speed < CFG.ARB_STOP_VEL_THRESHOLD then
-        State.lookahead.lastTargetVel = Vector3.zero
-        return baseCF
-    end
-
+    if speed < CFG.ARB_STOP_VEL_THRESHOLD then return baseCF end
     local offset = vel * (dt * CFG.LOOKAHEAD_FRAMES)
     if offset.Magnitude > CFG.LOOKAHEAD_MAX_OFFSET then
         offset = offset.Unit * CFG.LOOKAHEAD_MAX_OFFSET
     end
-
-    State.lookahead.lastTargetVel = vel
     return baseCF + offset
 end
 
 -- ════════════════════════════════════════════════════════════════════════════
---  SÄULE 4: COLLISION GROUP ISOLATION
+--  COLLISION GROUP
 -- ════════════════════════════════════════════════════════════════════════════
 
 local function buildCollisionGroup()
@@ -379,25 +405,22 @@ local function destroyCollisionGroup()
 end
 
 -- ════════════════════════════════════════════════════════════════════════════
---  SÄULE 5: ADAPTIVE ANIMATION SPEED
+--  ADAPTIVE ANIMATION SPEED
 -- ════════════════════════════════════════════════════════════════════════════
 
 local function updateAnimationSpeed()
     local tHRP = State.targetHRP
     if not tHRP then return end
-
-    local speed   = tHRP.AssemblyLinearVelocity.Magnitude
-    local target  = math.clamp(
+    local speed  = tHRP.AssemblyLinearVelocity.Magnitude
+    local target = math.clamp(
         CFG.ANIM_SPEED_IDLE + speed * CFG.ANIM_SPEED_VEL_SCALE,
         CFG.ANIM_SPEED_IDLE,
         CFG.ANIM_SPEED_MAX
     )
     local current = State.animSpeed.current
     local new     = current + (target - current) * CFG.ANIM_SPEED_SMOOTH
-
     if math.abs(new - current) < 0.01 then return end
     State.animSpeed.current = new
-
     for _, slot in pairs(State.animTracks) do
         if slot.track and slot.track.IsPlaying then
             safe(function() slot.track:AdjustSpeed(new) end, "updateAnimSpeed")
@@ -500,6 +523,7 @@ local function refreshMyCache()
         State.arb.stopFrames        = 0
         State.arb.lastServerPushVel = Vector3.zero
         PID.reset()
+        resetKS()
     end
 end
 
@@ -576,19 +600,15 @@ local function playAnimation(mode, opts)
     opts = opts or {}
     local animId = ANIM_IDS[mode]
     if not animId or not State.myHum then return end
-
     local animRunning = false
-
     local function playFn(char)
         if not char or not State.active or animRunning then return end
         animRunning = true
-
         local hum = getHumanoid(char)
         if not hum then animRunning = false; return end
         if opts.r6Only and hum.RigType ~= Enum.HumanoidRigType.R6 then
             animRunning = false; return
         end
-
         local track
         if type(Deps._AF_getReliableActionTrack) == "function" then
             track = Deps._AF_getReliableActionTrack(hum, animId, mode .. "Anim")
@@ -596,10 +616,8 @@ local function playAnimation(mode, opts)
             track = loadAnimation(hum, animId, mode .. "Anim")
         end
         if not track then animRunning = false; return end
-
         if opts.speed   then safe(function() track:AdjustSpeed(opts.speed) end, "playAnim:speed") end
         if opts.timePos then track:AdjustSpeed(0); track.TimePosition = opts.timePos end
-
         local slot = State.animTracks[mode] or {}
         if slot.conn then safe(function() slot.conn:Disconnect() end, "playAnim:oldConn") end
         slot.track = track
@@ -614,7 +632,6 @@ local function playAnimation(mode, opts)
         track:Play()
         animRunning = false
     end
-
     playFn(State.myChar)
 end
 
@@ -674,12 +691,71 @@ local function calculateTargetCFrame(mode, modeData, dt)
 end
 
 -- ════════════════════════════════════════════════════════════════════════════
---  POSITION APPLIER
+--  KINEMATIC SYNC APPLIER (neue Methode, ersetzt applyPosition)
 -- ════════════════════════════════════════════════════════════════════════════
 
 local function applyPosition(myHRP, desiredCF, dt)
-    local now = tick()
+    local tHRP = State.targetHRP
+    if not tHRP then return end
 
+    local ks       = State.ks
+    local tarPos   = desiredCF.Position
+    local myPos    = myHRP.Position
+    local errMag   = (tarPos - myPos).Magnitude
+    local tarVel   = tHRP.AssemblyLinearVelocity
+    local totalSpeed = tarVel.Magnitude
+
+    local velXZ = Vector3.new(tarVel.X, 0, tarVel.Z).Magnitude
+    local velY  = math.abs(tarVel.Y)
+
+    -- Y delta tracking
+    local yDelta = math.abs(tarPos.Y - ks.lastTargetY)
+    ks.lastTargetY = tarPos.Y
+
+    -- Jump detection
+    if velY > CFG.KS_JUMP_VEL_Y or yDelta > CFG.KS_JUMP_Y_DELTA then
+        ks.jumpCooldown = CFG.KS_JUMP_COOLDOWN
+    end
+    if ks.jumpCooldown > 0 then ks.jumpCooldown = ks.jumpCooldown - dt end
+    local isJumping = ks.jumpCooldown > 0
+
+    -- Fly detection (sustained)
+    if velY > CFG.KS_FLY_VEL_Y_MIN or totalSpeed > CFG.KS_FLY_SPEED_THRESHOLD then
+        ks.flyFrames = ks.flyFrames + 1
+    else
+        ks.flyFrames = math.max(0, ks.flyFrames - 2)
+    end
+    local isFlying = ks.flyFrames >= CFG.KS_FLY_FRAMES_REQ
+
+    -- Stop XZ
+    if velXZ < CFG.KS_STOP_VEL_XZ then
+        ks.stopFramesXZ = ks.stopFramesXZ + 1
+    else
+        ks.stopFramesXZ = 0
+    end
+
+    -- Stop Y
+    if velY < CFG.KS_STOP_VEL_Y and not isJumping and not isFlying then
+        ks.stopFramesY = ks.stopFramesY + 1
+    else
+        ks.stopFramesY = 0
+    end
+
+    local isStoppedXZ = ks.stopFramesXZ >= CFG.KS_STOP_FRAMES
+    local isStoppedY  = ks.stopFramesY >= CFG.KS_STOP_FRAMES and not isJumping and not isFlying
+    local isFullStop  = isStoppedXZ and isStoppedY and not isFlying
+
+    -- Rotation stop
+    local rotSpeed = tHRP.AssemblyAngularVelocity.Magnitude
+    if rotSpeed < CFG.KS_ROT_STOP_THRESHOLD then
+        ks.rotStopFrames = ks.rotStopFrames + 1
+    else
+        ks.rotStopFrames = 0
+    end
+    local isRotStopped = ks.rotStopFrames >= CFG.KS_ROT_STOP_FRAMES
+
+    -- ARB: rubber-band & spike check
+    local now = tick()
     if now < State.arb.frozenUntil then
         safe(function()
             myHRP.CFrame                 = desiredCF
@@ -701,42 +777,49 @@ local function applyPosition(myHRP, desiredCF, dt)
 
     State.arb.freezeCount = 0
 
-    if updateStopDetection() then
+    -- Rotation: sole owner is AlignOrientation
+    if State.alignOrientation then
         safe(function()
-            myHRP.CFrame                  = desiredCF
-            myHRP.AssemblyLinearVelocity  = Vector3.zero
-            myHRP.AssemblyAngularVelocity = Vector3.zero
-        end, "applyPosition:stopped")
-        ARB.recordPosition(myHRP.CFrame)
-        return
+            State.alignOrientation.CFrame = desiredCF
+        end, "applyPosition:alignOri")
     end
 
-    local isHard  = CFG.HARD_ATTACH_MODES[State.mode]
-    local finalCF = isHard and desiredCF or getLookAheadCF(desiredCF, dt)
-
-    if isHard then
+    -- Position: direct lock, no lerp (eliminates jitter)
+    if not ks.initialized or errMag > CFG.KS_SNAP_DIST then
         safe(function()
-            myHRP.CFrame                  = finalCF
-            myHRP.AssemblyLinearVelocity  = Vector3.zero
-            myHRP.AssemblyAngularVelocity = Vector3.zero
-        end, "applyPosition:hard")
+            myHRP.CFrame = desiredCF
+        end, "applyPosition:init")
+        ks.initialized = true
+    elseif isFullStop and isRotStopped then
+        safe(function()
+            myHRP.CFrame = CFrame.new(tarPos) * myHRP.CFrame.Rotation
+        end, "applyPosition:fullStop")
     else
-        local pidForce = PID.compute(myHRP.CFrame.Position, finalCF.Position, dt)
+        -- Direct position lock for all movement states
+        -- No lerp = no oscillation/jitter
+        safe(function()
+            myHRP.CFrame = CFrame.new(tarPos) * myHRP.CFrame.Rotation
+        end, "applyPosition:directLock")
+    end
 
-        if State.linearVelocity then
+    -- Velocity: always null after CFrame set
+    safe(function()
+        myHRP.AssemblyLinearVelocity  = Vector3.zero
+        myHRP.AssemblyAngularVelocity = Vector3.zero
+        if State.bodyVelocity then State.bodyVelocity.Velocity = Vector3.zero end
+    end, "applyPosition:velNull")
+
+    -- LV: minimal residual correction only
+    local residual = tarPos - myHRP.Position
+    if State.linearVelocity then
+        if residual.Magnitude > CFG.KS_DEADZONE and not isFullStop then
             safe(function()
-                State.linearVelocity.VectorVelocity = pidForce / CFG.PID_MAX_FORCE * 60
-            end, "applyPosition:linearVel")
+                State.linearVelocity.VectorVelocity = residual * CFG.KS_LV_RESIDUAL
+            end, "applyPosition:lv")
         else
             safe(function()
-                myHRP.CFrame = myHRP.CFrame:Lerp(finalCF, math.clamp(dt * CFG.PID_KP, 0, 1))
-            end, "applyPosition:pidFallback")
-        end
-
-        if State.alignOrientation then
-            safe(function()
-                State.alignOrientation.CFrame = finalCF
-            end, "applyPosition:alignOri")
+                State.linearVelocity.VectorVelocity = Vector3.zero
+            end, "applyPosition:lvZero")
         end
     end
 
@@ -830,6 +913,7 @@ local function bindRespawnHandlers()
         setupHealthProtection()
         ensureNetworkOwnership()
         PID.reset()
+        resetKS()
         if State.mode and State.target then playAnimation(State.mode, {}) end
     end)
 
@@ -839,6 +923,7 @@ local function bindRespawnHandlers()
         if not State.active then return end
         task.wait(CFG.RESPAWN_WAIT)
         refreshTargetCache()
+        resetKS()
     end)
 
     local targetChar = State.target.Character
@@ -891,7 +976,6 @@ local function onHeartbeat(dt)
     local tHRP  = State.targetHRP
     if not myHRP or not tHRP or not tHRP.Parent then return end
 
-    -- PhysicsRepRootPart: jeden 2. Frame
     _physRepFrame = _physRepFrame + 1
     if _physRepFrame >= CFG.PHYSREP_EVERY_N_FRAMES then
         _physRepFrame = 0
@@ -949,6 +1033,12 @@ function M.startBB(targetPlayer, modeKey)
     State.arb.lastServerPushVel = Vector3.zero
 
     PID.reset()
+    resetKS()
+
+    if State.targetHRP then
+        State.ks.lastTargetY = State.targetHRP.Position.Y
+    end
+
     State.animSpeed.current = 1.0
     _physRepFrame           = 0
 
@@ -996,6 +1086,11 @@ function M.switchMode(newMode)
     State.mode              = newMode
     State.animSpeed.current = 1.0
     PID.reset()
+    resetKS()
+
+    if State.targetHRP then
+        State.ks.lastTargetY = State.targetHRP.Position.Y
+    end
 
     clearTable(State.arb.positionHistory)
     State.arb.lastConfirmedCF = State.myHRP and State.myHRP.CFrame or nil
@@ -1029,9 +1124,8 @@ function M.stopBB()
     destroyCollisionGroup()
     removeRaknetHook()
 
-    local myChar = State.myChar
-    local myHRP  = State.myHRP
-    local myHum  = State.myHum
+    local myHRP = State.myHRP
+    local myHum = State.myHum
 
     if myHRP then
         safe(function()
@@ -1069,6 +1163,7 @@ function M.stopBB()
     State.arb.lastServerPushVel = Vector3.zero
 
     PID.reset()
+    resetKS()
 
     if Deps._AF then Deps._AF.bbActive = false end
 
@@ -1106,6 +1201,12 @@ function M.getState()
         arb = {
             freezeCount = State.arb.freezeCount,
             stopFrames  = State.arb.stopFrames,
+        },
+        ks = {
+            isFlying   = State.ks.flyFrames >= CFG.KS_FLY_FRAMES_REQ,
+            isJumping  = State.ks.jumpCooldown > 0,
+            stopXZ     = State.ks.stopFramesXZ,
+            stopY      = State.ks.stopFramesY,
         }
     }
 end
