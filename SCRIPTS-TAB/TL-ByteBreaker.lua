@@ -1,11 +1,3 @@
--- ════════════════════════════════════════════════════════════════════════════
---  TLEX ByteBreaker V2 — Refactored Attach System
---  • Unified state management
---  • Performance-optimized caching
---  • Modular oscillator system
---  • Proper error handling & logging
--- ════════════════════════════════════════════════════════════════════════════
-
 local M = {}
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -359,15 +351,20 @@ local function playAnimation(mode, opts)
 	opts = opts or {}
 	local animId = ANIM_IDS[mode]
 	if not animId or not State.myHum then return end
-	
+
 	local function playFn(char)
 		if not char or not State.active then return end
 		local hum = getHumanoid(char)
 		if not hum then return end
-		
+
 		if opts.r6Only and hum.RigType ~= Enum.HumanoidRigType.R6 then return end
-		
-		local track = loadAnimation(hum, animId, mode .. "Anim")
+
+		local track = nil
+		if type(Deps._AF_getReliableActionTrack) == "function" then
+			track = Deps._AF_getReliableActionTrack(hum, animId, mode .. "Anim")
+		else
+			track = loadAnimation(hum, animId, mode .. "Anim")
+		end
 		if not track then return end
 		
 		if opts.speed then safe(function() track:AdjustSpeed(opts.speed) end, "playAnimation:speed") end
@@ -808,6 +805,7 @@ function M.initBB(cfg)
 	Deps.safeStand = cfg.safeStand
 	Deps._AF = cfg._AF or {}
 	Deps._TL_refs = cfg._TL_refs or {}
+	Deps._AF_getReliableActionTrack = cfg._AF_getReliableActionTrack
 end
 
 function M.isActive()
