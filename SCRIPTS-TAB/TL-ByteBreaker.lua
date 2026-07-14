@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════════════
---  TLEX ByteBreaker V2.1 — Anti-Rubber-Band Edition
+--  TLEX ByteBreaker V2.2 — Anti-Rubber-Band + Stop/Snap Fix
 -- ════════════════════════════════════════════════════════════════════════════
 
 local M = {}
@@ -22,15 +22,25 @@ local CFG = {
     MATCH_TARGET_VELOCITY     = false,
     VELOCITY_MATCH_FACTOR     = 0.8,
 
-    -- Anti-Rubber-Band
     ARB_ENABLED               = true,
-    ARB_MAX_CORRECTION        = 8,        -- stud threshold to trigger correction
-    ARB_CORRECTION_ALPHA      = 0.35,     -- lerp strength per frame (0.1=soft, 1=instant)
-    ARB_HISTORY_SIZE          = 6,        -- how many frames of position history to keep
-    ARB_VELOCITY_DAMP         = 0.15,     -- damping factor applied to server-pushed velocity
-    ARB_FREEZE_DURATION       = 0.25,     -- seconds to freeze position after rubber-band detected
-    ARB_MAX_FREEZES           = 4,        -- max consecutive freezes before force-reset
-    ARB_RESET_COOLDOWN        = 1.5,      -- cooldown between full position resets
+    ARB_MAX_CORRECTION        = 8,
+    ARB_HISTORY_SIZE          = 8,
+    ARB_VELOCITY_DAMP         = 0.12,
+    ARB_FREEZE_DURATION       = 0.2,
+    ARB_MAX_FREEZES           = 4,
+    ARB_RESET_COOLDOWN        = 1.5,
+
+    ARB_ALPHA_MIN             = 0.25,
+    ARB_ALPHA_MAX             = 1.0,
+    ARB_ALPHA_DIST_NEAR       = 0.3,
+    ARB_ALPHA_DIST_FAR        = 4.0,
+
+    ARB_PREDICTION_FACTOR     = 0.85,
+    ARB_PREDICTION_MAX        = 2.5,
+
+    ARB_STOP_VEL_THRESHOLD    = 0.8,
+    ARB_STOP_SNAP_ALPHA       = 1.0,
+    ARB_STOP_FRAMES           = 3,
 }
 
 local ANIM_IDS = {
@@ -58,36 +68,36 @@ local ANIM_IDS = {
 }
 
 local ATTACH_MODES = {
-    bb_attach      = { x = 0, y = -0.85, z = -2.0, rotX = 20, rotY = 0, rotZ = 0, osc = 1.5, oscSpeed = 10 },
-    bb_orbit       = { distance = 8, speed = 1.5, type = "orbit" },
-    bb_frontwalk   = { distance = 5, facing = "front", type = "follow" },
-    bb_behind      = { distance = 5, facing = "back", type = "follow" },
-    bb_cuffing     = { distance = 1.5, facing = "back", type = "follow" },
-    bb_headsit     = { x = 0, y = 1.4, z = 0, rotX = 90, headRelative = true },
-    bb_copy        = { x = 4, y = 0, z = 0 },
-    bb_piggyback   = { x = 0, y = 0.2, z = 1.1 },
-    bb_backpack    = { x = 0, y = 2.5, z = 1.2 },
-    bb_piggyback2  = { x = 0, y = 0.2, z = 1.1 },
-    bb_carry       = { x = 0.5, y = -0.5, z = -1.2 },
+    bb_attach        = { x = 0, y = -0.85, z = -2.0, rotX = 20, rotY = 0, rotZ = 0, osc = 1.5, oscSpeed = 10 },
+    bb_orbit         = { distance = 8, speed = 1.5, type = "orbit" },
+    bb_frontwalk     = { distance = 5, facing = "front", type = "follow" },
+    bb_behind        = { distance = 5, facing = "back", type = "follow" },
+    bb_cuffing       = { distance = 1.5, facing = "back", type = "follow" },
+    bb_headsit       = { x = 0, y = 1.4, z = 0, rotX = 90, headRelative = true },
+    bb_copy          = { x = 4, y = 0, z = 0 },
+    bb_piggyback     = { x = 0, y = 0.2, z = 1.1 },
+    bb_backpack      = { x = 0, y = 2.5, z = 1.2 },
+    bb_piggyback2    = { x = 0, y = 0.2, z = 1.1 },
+    bb_carry         = { x = 0.5, y = -0.5, z = -1.2 },
     bb_carryshoulder = { x = 1.8, y = 0.2, z = 0.9 },
-    bb_carry2      = { x = 0.5, y = 1.0, z = -1.2 },
-    bb_hug         = { x = 0, y = 0.05, z = -1.35, rotY = 180, osc = 0.04, oscSpeed = 10 },
-    bb_hug2        = { x = 0, y = 0, z = 1.1 },
-    bb_stand       = { x = -0.8, y = 2, z = 2.2 },
-    bb_layfuck     = { x = 0, y = 0.1, z = 0.9, osc = 0.9, oscSpeed = 12 },
-    bb_headstand   = { x = 0.2, y = 4, z = 0.2 },
-    bb_licking     = { x = 0, y = -1.7, z = -2.5, rotY = 180, osc = 0.4, oscSpeed = 15 },
-    bb_bangv2      = { x = 0, y = 0.2, z = 3.5, osc = 3, oscSpeed = 10, useOscTimer = true },
-    bb_stomach     = { x = 0, y = 0, z = 3.0, rotY = 180 },
-    bb_kiss        = { x = 0, y = 1.5, z = -1.2, rotY = 180, osc = 0.08, oscSpeed = 10 },
-    bb_sucking     = { x = 0, y = -0.4, z = -3.1, rotY = 180, osc = 0.5, oscSpeed = 20 },
-    bb_suck_it     = { x = 0, y = -1.2, z = -2.0, rotY = 180, osc = 1.0, oscSpeed = 12 },
-    bb_backshots   = { x = 0, y = -3.2, z = -2.0, rotX = 20, osc = 1.5, oscSpeed = 10 },
-    bb_doggy       = { x = 0, y = -4.7, z = -0.8, rotX = -90 },
-    bb_pussyspread = { x = 0, y = -2.45, z = -2.0, osc = 1.5, oscSpeed = 10 },
-    bb_soh         = { y = 1, headRelative = true },
-    bb_shouldersit = { x = 1.8, y = 2.2, z = 0 },
-    bb_friend      = { x = 3, y = 0, z = 0 },
+    bb_carry2        = { x = 0.5, y = 1.0, z = -1.2 },
+    bb_hug           = { x = 0, y = 0.05, z = -1.35, rotY = 180, osc = 0.04, oscSpeed = 10 },
+    bb_hug2          = { x = 0, y = 0, z = 1.1 },
+    bb_stand         = { x = -0.8, y = 2, z = 2.2 },
+    bb_layfuck       = { x = 0, y = 0.1, z = 0.9, osc = 0.9, oscSpeed = 12 },
+    bb_headstand     = { x = 0.2, y = 4, z = 0.2 },
+    bb_licking       = { x = 0, y = -1.7, z = -2.5, rotY = 180, osc = 0.4, oscSpeed = 15 },
+    bb_bangv2        = { x = 0, y = 0.2, z = 3.5, osc = 3, oscSpeed = 10, useOscTimer = true },
+    bb_stomach       = { x = 0, y = 0, z = 3.0, rotY = 180 },
+    bb_kiss          = { x = 0, y = 1.5, z = -1.2, rotY = 180, osc = 0.08, oscSpeed = 10 },
+    bb_sucking       = { x = 0, y = -0.4, z = -3.1, rotY = 180, osc = 0.5, oscSpeed = 20 },
+    bb_suck_it       = { x = 0, y = -1.2, z = -2.0, rotY = 180, osc = 1.0, oscSpeed = 12 },
+    bb_backshots     = { x = 0, y = -3.2, z = -2.0, rotX = 20, osc = 1.5, oscSpeed = 10 },
+    bb_doggy         = { x = 0, y = -4.7, z = -0.8, rotX = -90 },
+    bb_pussyspread   = { x = 0, y = -2.45, z = -2.0, osc = 1.5, oscSpeed = 10 },
+    bb_soh           = { y = 1, headRelative = true },
+    bb_shouldersit   = { x = 1.8, y = 2.2, z = 0 },
+    bb_friend        = { x = 3, y = 0, z = 0 },
 }
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -123,15 +133,15 @@ local State = {
     ownershipSet        = false,
     collisionGroupSetup = false,
 
-    -- Anti-Rubber-Band State
     arb = {
-        positionHistory = {},
-        lastConfirmedCF = nil,
-        frozenUntil     = 0,
-        freezeCount     = 0,
-        lastResetAt     = 0,
-        lastServerPushVel = Vector3.zero,
-        active          = false,
+        positionHistory     = {},
+        lastConfirmedCF     = nil,
+        frozenUntil         = 0,
+        freezeCount         = 0,
+        lastResetAt         = 0,
+        lastServerPushVel   = Vector3.zero,
+        stopFrames          = 0,
+        active              = false,
     }
 }
 
@@ -183,110 +193,128 @@ end
 
 local ARB = {}
 
--- Record current confirmed position into history ring buffer
 function ARB.recordPosition(cf)
     local h = State.arb.positionHistory
     table.insert(h, 1, cf)
-    if #h > CFG.ARB_HISTORY_SIZE then
-        table.remove(h, #h)
-    end
+    if #h > CFG.ARB_HISTORY_SIZE then table.remove(h, #h) end
     State.arb.lastConfirmedCF = cf
 end
 
--- Detect if server has rubber-banded us away from desired position
+local function adaptiveAlpha(myPos, desiredPos)
+    local dist = (myPos - desiredPos).Magnitude
+    local t    = math.clamp(
+        (dist - CFG.ARB_ALPHA_DIST_NEAR) / (CFG.ARB_ALPHA_DIST_FAR - CFG.ARB_ALPHA_DIST_NEAR),
+        0, 1
+    )
+    return CFG.ARB_ALPHA_MIN + t * (CFG.ARB_ALPHA_MAX - CFG.ARB_ALPHA_MIN)
+end
+
+local function predictedDesiredCF(desiredCF, dt)
+    local tHRP = State.targetHRP
+    if not tHRP then return desiredCF end
+
+    local vel   = tHRP.AssemblyLinearVelocity
+    local speed = vel.Magnitude
+
+    if speed < CFG.ARB_STOP_VEL_THRESHOLD then return desiredCF end
+
+    local offset = vel * dt * CFG.ARB_PREDICTION_FACTOR
+    if offset.Magnitude > CFG.ARB_PREDICTION_MAX then
+        offset = offset.Unit * CFG.ARB_PREDICTION_MAX
+    end
+
+    return desiredCF + offset
+end
+
+local function updateStopDetection()
+    local tHRP = State.targetHRP
+    if not tHRP then
+        State.arb.stopFrames = 0
+        return false
+    end
+
+    local vel = tHRP.AssemblyLinearVelocity
+    if vel.Magnitude < CFG.ARB_STOP_VEL_THRESHOLD then
+        State.arb.stopFrames = (State.arb.stopFrames or 0) + 1
+    else
+        State.arb.stopFrames = 0
+    end
+
+    return State.arb.stopFrames >= CFG.ARB_STOP_FRAMES
+end
+
 function ARB.detectRubberBand(myHRP, desiredCF)
     if not myHRP or not desiredCF then return false end
-
-    local actualPos   = myHRP.CFrame.Position
-    local desiredPos  = desiredCF.Position
-    local delta       = (actualPos - desiredPos).Magnitude
-
-    return delta > CFG.ARB_MAX_CORRECTION
+    return (myHRP.CFrame.Position - desiredCF.Position).Magnitude > CFG.ARB_MAX_CORRECTION
 end
 
--- Detect server-pushed velocity spike (rubber-band incoming)
 function ARB.detectVelocitySpike(myHRP)
     if not myHRP then return false end
-
-    local vel = myHRP.AssemblyLinearVelocity
-    local prev = State.arb.lastServerPushVel
+    local vel   = myHRP.AssemblyLinearVelocity
+    local prev  = State.arb.lastServerPushVel
     local spike = (vel - prev).Magnitude
-
     State.arb.lastServerPushVel = vel
-    return spike > 18 -- studs/s delta threshold
+    return spike > 18
 end
 
--- Dampen incoming server velocity push
 function ARB.dampVelocity(myHRP)
     if not myHRP then return end
     safe(function()
-        local vel = myHRP.AssemblyLinearVelocity
-        myHRP.AssemblyLinearVelocity = vel * CFG.ARB_VELOCITY_DAMP
+        myHRP.AssemblyLinearVelocity  = myHRP.AssemblyLinearVelocity * CFG.ARB_VELOCITY_DAMP
         myHRP.AssemblyAngularVelocity = Vector3.zero
     end, "ARB.dampVelocity")
 end
 
--- Freeze position for a short window after rubber-band detection
 function ARB.freeze(myHRP, desiredCF)
     local now = tick()
     if now < State.arb.frozenUntil then return end
-
     State.arb.freezeCount = State.arb.freezeCount + 1
     State.arb.frozenUntil = now + CFG.ARB_FREEZE_DURATION
-
     safe(function()
-        myHRP.CFrame = desiredCF
-        myHRP.AssemblyLinearVelocity = Vector3.zero
+        myHRP.CFrame                  = desiredCF
+        myHRP.AssemblyLinearVelocity  = Vector3.zero
         myHRP.AssemblyAngularVelocity = Vector3.zero
     end, "ARB.freeze")
 end
 
--- Force reset back to last confirmed safe position
 function ARB.forceReset(myHRP)
     local now = tick()
     if now - State.arb.lastResetAt < CFG.ARB_RESET_COOLDOWN then return end
-
-    State.arb.lastResetAt   = now
-    State.arb.freezeCount   = 0
-    State.arb.frozenUntil   = 0
+    State.arb.lastResetAt = now
+    State.arb.freezeCount = 0
+    State.arb.frozenUntil = 0
 
     local cf = State.arb.lastConfirmedCF
         or (State.targetHRP and State.targetHRP.CFrame * CFrame.new(0, 2, 2))
 
     if cf and myHRP then
         safe(function()
-            myHRP.CFrame = cf
-            myHRP.AssemblyLinearVelocity = Vector3.zero
+            myHRP.CFrame                  = cf
+            myHRP.AssemblyLinearVelocity  = Vector3.zero
             myHRP.AssemblyAngularVelocity = Vector3.zero
         end, "ARB.forceReset")
     end
-
     warn("[BB-ARB] Force reset triggered")
 end
 
--- Main ARB tick — called every heartbeat
 function ARB.update(myHRP, desiredCF, dt)
     if not CFG.ARB_ENABLED or not myHRP or not desiredCF then return end
 
     local now = tick()
 
-    -- Still frozen from last correction
     if now < State.arb.frozenUntil then
         safe(function()
-            myHRP.CFrame = desiredCF
-            myHRP.AssemblyLinearVelocity = Vector3.zero
+            myHRP.CFrame                  = desiredCF
+            myHRP.AssemblyLinearVelocity  = Vector3.zero
         end, "ARB.update:frozen")
         return
     end
 
-    local spiked = ARB.detectVelocitySpike(myHRP)
-    local drifted = ARB.detectRubberBand(myHRP, desiredCF)
-
-    if spiked then
+    if ARB.detectVelocitySpike(myHRP) then
         ARB.dampVelocity(myHRP)
     end
 
-    if drifted then
+    if ARB.detectRubberBand(myHRP, desiredCF) then
         if State.arb.freezeCount >= CFG.ARB_MAX_FREEZES then
             ARB.forceReset(myHRP)
         else
@@ -295,19 +323,25 @@ function ARB.update(myHRP, desiredCF, dt)
         return
     end
 
-    -- No rubber-band detected: smooth correction toward desired
     State.arb.freezeCount = 0
-    local alpha = CFG.ARB_CORRECTION_ALPHA
 
-    if alpha > 0 and alpha < 1 then
+    local targetStopped = updateStopDetection()
+    if targetStopped then
         safe(function()
-            myHRP.CFrame = myHRP.CFrame:Lerp(desiredCF, alpha)
-        end, "ARB.update:lerp")
-    else
-        safe(function()
-            myHRP.CFrame = desiredCF
-        end, "ARB.update:instant")
+            myHRP.CFrame                  = desiredCF
+            myHRP.AssemblyLinearVelocity  = Vector3.zero
+            myHRP.AssemblyAngularVelocity = Vector3.zero
+        end, "ARB.update:stopped")
+        ARB.recordPosition(myHRP.CFrame)
+        return
     end
+
+    local finalCF = predictedDesiredCF(desiredCF, dt)
+    local alpha   = adaptiveAlpha(myHRP.CFrame.Position, finalCF.Position)
+
+    safe(function()
+        myHRP.CFrame = myHRP.CFrame:Lerp(finalCF, alpha)
+    end, "ARB.update:lerp")
 
     ARB.recordPosition(myHRP.CFrame)
 end
@@ -319,18 +353,18 @@ end
 local function refreshMyCache()
     local char = Deps.LocalPlayer.Character
     if char ~= State.myChar then
-        State.myChar = char
-        State.myHRP  = char and char:FindFirstChild("HumanoidRootPart")
-        State.myHum  = getHumanoid(char)
+        State.myChar  = char
+        State.myHRP   = char and char:FindFirstChild("HumanoidRootPart")
+        State.myHum   = getHumanoid(char)
         if State.myHRP then State.lastSafeY = State.myHRP.Position.Y end
         State.ownershipSet        = false
         State.collisionGroupSetup = false
-        -- Reset ARB on character change
         clearTable(State.arb.positionHistory)
-        State.arb.lastConfirmedCF     = nil
-        State.arb.frozenUntil         = 0
-        State.arb.freezeCount         = 0
-        State.arb.lastServerPushVel   = Vector3.zero
+        State.arb.lastConfirmedCF   = nil
+        State.arb.frozenUntil       = 0
+        State.arb.freezeCount       = 0
+        State.arb.stopFrames        = 0
+        State.arb.lastServerPushVel = Vector3.zero
     end
 end
 
@@ -338,10 +372,10 @@ local function refreshTargetCache()
     if not State.target then return end
     local char = State.target.Character
     if char ~= State.targetChar or not State.targetHRP or not State.targetHRP.Parent then
-        State.targetChar   = char
-        State.targetHRP    = char and char:FindFirstChild("HumanoidRootPart")
-        State.targetHead   = char and char:FindFirstChild("Head")
-        State.targetTorso  = char and (char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso"))
+        State.targetChar  = char
+        State.targetHRP   = char and char:FindFirstChild("HumanoidRootPart")
+        State.targetHead  = char and char:FindFirstChild("Head")
+        State.targetTorso = char and (char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso"))
 
         if State.myHRP and State.targetHRP then
             safe(function()
@@ -358,8 +392,8 @@ end
 local function createBodyVelocity(parent)
     local bv = Instance.new("BodyVelocity")
     bv.MaxForce = Vector3.new(0, 1e6, 0)
-    bv.Velocity  = Vector3.zero
-    bv.Parent    = parent
+    bv.Velocity = Vector3.zero
+    bv.Parent   = parent
     State.bodyMovers[#State.bodyMovers + 1] = bv
     return bv
 end
@@ -391,8 +425,8 @@ local function setupCollisionGroup()
             PS:CollisionGroupSetCollidable("BBAttach", "BBAttach", false)
         end
         if State.myChar then
-            for _, part in ipairs(State.myChar:GetDescendants()) do
-                if part:IsA("BasePart") then PS:SetPartCollisionGroup(part, "BBAttach") end
+            for _, p in ipairs(State.myChar:GetDescendants()) do
+                if p:IsA("BasePart") then PS:SetPartCollisionGroup(p, "BBAttach") end
             end
         end
         State.collisionGroupSetup = true
@@ -404,8 +438,8 @@ local function resetCollisionGroup()
     safe(function()
         local PS = Deps.PhysicsService
         if State.myChar then
-            for _, part in ipairs(State.myChar:GetDescendants()) do
-                if part:IsA("BasePart") then PS:SetPartCollisionGroup(part, "Default") end
+            for _, p in ipairs(State.myChar:GetDescendants()) do
+                if p:IsA("BasePart") then PS:SetPartCollisionGroup(p, "Default") end
             end
         end
         State.collisionGroupSetup = false
@@ -463,7 +497,7 @@ local function stopAllAnimations()
     for _, slot in pairs(State.animTracks) do
         safe(function()
             if slot.track then slot.track:AdjustSpeed(1); slot.track:Stop() end
-            if slot.conn then slot.conn:Disconnect() end
+            if slot.conn  then slot.conn:Disconnect() end
         end, "stopAllAnimations")
     end
     clearTable(State.animTracks)
@@ -474,9 +508,9 @@ local function loadAnimation(humanoid, animId, animName)
         or Instance.new("Animator", humanoid)
     local anim = Instance.new("Animation")
     anim.AnimationId = "rbxassetid://" .. animId
-    anim.Name = animName or "BBAnim"
-    local track = animator:LoadAnimation(anim)
-    track.Priority = Enum.AnimationPriority.Action4
+    anim.Name        = animName or "BBAnim"
+    local track      = animator:LoadAnimation(anim)
+    track.Priority   = Enum.AnimationPriority.Action4
     task.delay(0.5, function() safe(function() anim:Destroy() end, "loadAnim:cleanup") end)
     return track
 end
@@ -500,13 +534,13 @@ local function playAnimation(mode, opts)
         end
         if not track then return end
 
-        if opts.speed then safe(function() track:AdjustSpeed(opts.speed) end, "playAnim:speed") end
+        if opts.speed   then safe(function() track:AdjustSpeed(opts.speed) end, "playAnim:speed") end
         if opts.timePos then track:AdjustSpeed(0); track.TimePosition = opts.timePos end
 
         local slot = State.animTracks[mode] or {}
         if slot.conn then safe(function() slot.conn:Disconnect() end, "playAnim:oldConn") end
         slot.track = track
-        slot.conn = track.Stopped:Connect(function()
+        slot.conn  = track.Stopped:Connect(function()
             if State.active and State.mode == mode then
                 task.wait(CFG.ANIMATION_RETRY_DELAY)
                 playFn(char)
@@ -600,7 +634,7 @@ local function checkVoidRescue()
         State.lastSafeY = hrp.Position.Y
         return
     end
-    local tHRP = State.targetHRP
+    local tHRP     = State.targetHRP
     local rescueCF = tHRP and (tHRP.CFrame * CFrame.new(0, CFG.RESCUE_Y, 0))
         or CFrame.new(hrp.Position.X, math.max(State.lastSafeY, CFG.RESCUE_Y), hrp.Position.Z)
     safe(function()
@@ -731,7 +765,6 @@ local function onHeartbeat(dt)
     local tHRP  = State.targetHRP
     if not myHRP or not tHRP or not tHRP.Parent then return end
 
-    -- Velocity management
     if CFG.MATCH_TARGET_VELOCITY then
         local vel = tHRP.AssemblyLinearVelocity
         if vel.Magnitude > CFG.VELOCITY_THRESHOLD then
@@ -743,14 +776,12 @@ local function onHeartbeat(dt)
         end
     end
 
-    -- Position
     local modeData = ATTACH_MODES[State.mode]
     if not modeData then return end
 
     local desiredCF = calculateTargetCFrame(State.mode, modeData, dt)
     if not desiredCF then return end
 
-    -- Anti-Rubber-Band handles all position writing
     ARB.update(myHRP, desiredCF, dt)
 
     safe(function()
@@ -788,12 +819,12 @@ function M.startBB(targetPlayer, modeKey)
         return
     end
 
-    -- Init ARB state
     clearTable(State.arb.positionHistory)
     State.arb.lastConfirmedCF   = State.myHRP.CFrame
     State.arb.frozenUntil       = 0
     State.arb.freezeCount       = 0
     State.arb.lastResetAt       = 0
+    State.arb.stopFrames        = 0
     State.arb.lastServerPushVel = Vector3.zero
 
     setupRaknetHook()
@@ -805,17 +836,17 @@ function M.startBB(targetPlayer, modeKey)
 
     safe(function()
         State.myHum.PlatformStand = true
-        State.myHum.WalkSpeed = 0
+        State.myHum.WalkSpeed     = 0
     end, "startBB:humanoid")
 
     createBodyVelocity(State.myHRP)
 
     local animOpts = {}
-    if modeKey == "bb_kiss" then animOpts.r6Only = true end
-    if modeKey == "bb_sucking" then animOpts.speed = 2 end
-    if modeKey == "bb_suck_it" then animOpts.speed = 1.5 end
-    if modeKey == "bb_doggy" then animOpts.speed = 1.5 end
-    if modeKey == "bb_bangv2" then
+    if modeKey == "bb_kiss"      then animOpts.r6Only  = true end
+    if modeKey == "bb_sucking"   then animOpts.speed   = 2    end
+    if modeKey == "bb_suck_it"   then animOpts.speed   = 1.5  end
+    if modeKey == "bb_doggy"     then animOpts.speed   = 1.5  end
+    if modeKey == "bb_bangv2"    then
         animOpts.speed = 2
         Oscillator.reset(modeKey .. "_osc")
     end
@@ -865,7 +896,7 @@ function M.stopBB()
     if myHum then
         safe(function()
             myHum.PlatformStand = false
-            myHum.WalkSpeed = 16
+            myHum.WalkSpeed     = 16
             myHum:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
             myHum:SetStateEnabled(Enum.HumanoidStateType.Dead, true)
             myHum:ChangeState(Enum.HumanoidStateType.GettingUp)
@@ -885,10 +916,11 @@ function M.stopBB()
     State.ownershipSet   = false
 
     clearTable(State.arb.positionHistory)
-    State.arb.lastConfirmedCF     = nil
-    State.arb.frozenUntil         = 0
-    State.arb.freezeCount         = 0
-    State.arb.lastServerPushVel   = Vector3.zero
+    State.arb.lastConfirmedCF   = nil
+    State.arb.frozenUntil       = 0
+    State.arb.freezeCount       = 0
+    State.arb.stopFrames        = 0
+    State.arb.lastServerPushVel = Vector3.zero
 
     if Deps._AF then Deps._AF.bbActive = false end
 
@@ -923,9 +955,10 @@ function M.getState()
         target    = State.target and State.target.Name,
         lastError = State.lastError,
         arb = {
-            freezeCount   = State.arb.freezeCount,
-            frozenUntil   = State.arb.frozenUntil,
-            lastResetAt   = State.arb.lastResetAt,
+            freezeCount = State.arb.freezeCount,
+            frozenUntil = State.arb.frozenUntil,
+            lastResetAt = State.arb.lastResetAt,
+            stopFrames  = State.arb.stopFrames,
         }
     }
 end
