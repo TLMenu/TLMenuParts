@@ -48,7 +48,7 @@ local CFG = {
 
     COLLISION_GROUP_NAME     = "BBAttach_V3",
 
-    PHYSREP_EVERY_N_FRAMES   = 2, -- jeden 2. Frame
+    PHYSREP_EVERY_N_FRAMES   = 1, -- jeden 2. Frame
 
     HARD_ATTACH_MODES        = {
         bb_carry         = true,
