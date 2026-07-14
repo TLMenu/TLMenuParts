@@ -52,6 +52,8 @@ local UNMUTED_URL = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/head
 local MUTED_URL   = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/TL-DEFAULT/ANTIVCBAN-Mute-Icon.png"
 -- Asset refs in a table — mutable upvalue shared across all closures, no "unused local" warning
 local _vc_assets  = { unmuted = UNMUTED_URL, muted = MUTED_URL }
+local UNMUTED_ASSET = nil
+local MUTED_ASSET   = nil
 
 -- ── Notifications ─────────────────────────────────────────────────────────────
 local _sendNotif = nil
@@ -647,6 +649,4 @@ end
 if GLOBAL_ENV then
     GLOBAL_ENV.__TL_AntiVCBAN = API
 end
-task.spawn(function() API.start() end)
-
 return API
