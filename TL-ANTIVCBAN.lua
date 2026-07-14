@@ -1,7 +1,3 @@
-
-
-
-
 local GLOBAL_ENV = (typeof(getgenv) == "function" and getgenv()) or _G
 local RUNTIME_KEY = "__TL_AntiVCBAN_Runtime"
 
@@ -32,9 +28,9 @@ local VoiceInternal = (pcall(function() return game:GetService("VoiceChatInterna
     game:GetService("VoiceChatInternal")) or nil
 
 local lp = Players.LocalPlayer
-local get_conns = (typeof(getconnections) == "function" and getconnections)
-    or (typeof(get_signal_cons) == "function" and get_signal_cons)
-    or nil
+local _getconnections = rawget(_G, "getconnections")
+local _get_signal_cons = rawget(_G, "get_signal_cons")
+local get_conns = _getconnections or _get_signal_cons or nil
 
 
 local _vc_active = false
@@ -57,7 +53,7 @@ local MUTED_ASSET = "rbxasset://textures/ui/VoiceChat/MicLight/Muted.png"
 
 local _sendNotif = nil
 local function notify(title, text, duration)
-    if _sendNotif then _sendNotif(title, text, duration) return end
+    if _sendNotif then _sendNotif(title, text, duration); return end
     pcall(function()
         game:GetService("StarterGui"):SetCore("SendNotification", {
             Title = title, Text = text, Duration = duration or 3
@@ -66,30 +62,7 @@ local function notify(title, text, duration)
 end
 
 
-local function safeIsFile(path)
-    if type(isfile) ~= "function" then return false end
-    local ok, result = pcall(isfile, path)
-    return ok and result == true
-end
-local function safeMakeFolder(path)
-    if type(makefolder) ~= "function" then return false end
-    return pcall(makefolder, path)
-end
-local function safeWriteFile(path, bytes)
-    if type(writefile) ~= "function" then return false end
-    return pcall(writefile, path, bytes)
-end
-local function safeGetCustomAsset(path)
-    if type(getcustomasset) == "function" then
-        local ok, asset = pcall(getcustomasset, path)
-        if ok and asset and asset ~= "" then return asset end
-    end
-    if type(getsynasset) == "function" then
-        local ok, asset = pcall(getsynasset, path)
-        if ok and asset and asset ~= "" then return asset end
-    end
-    return nil
-end
+
 
 
 local _vcCachedTargets, _vcLastFetch = nil, 0
@@ -169,6 +142,36 @@ local function _vc_applyIconState(muted)
 end
 
 
+local _vc_VOICE_REJOIN_GAP = 0.5
+local _vc_FLUSH_ON_UNMUTE  = true
+local _vc_FLUSH_MIN_MUTE   = 8
+local _vc_mutedAt          = 0
+local _vc_flushing         = false
+local function _vc_flushVoicePipeline()
+    if _vc_flushing then return end
+    _vc_flushing = true
+    task.spawn(function()
+        pcall(function() VoiceChatService:leaveVoice() end)
+        task.wait(_vc_VOICE_REJOIN_GAP)
+        if not _vc_desiredMuted then
+            pcall(function() VoiceChatService:joinVoice() end)
+            for _ = 1, 12 do
+                task.wait(0.1)
+                if _vc_desiredMuted then break end
+                local live = false
+                pcall(function()
+                    if VoiceInternal and VoiceInternal.PublishPause then VoiceInternal:PublishPause(false) end
+                    if VoiceInternal and VoiceInternal.IsPublishPaused then live = (VoiceInternal:IsPublishPaused() == false) end
+                end)
+                if live then break end
+            end
+            pcall(_vc_manageConnections)
+        end
+        _vc_flushing = false
+    end)
+end
+
+
 local function _vc_toggleMute()
     local adi = _vc_getADI()
     local currentMuted = false
@@ -181,6 +184,7 @@ local function _vc_toggleMute()
     local newState = not currentMuted
     _vc_desiredMuted = newState
     _vc_lastToggleAt = tick()
+    if newState then _vc_mutedAt = tick() end
     _vc_applyIconState(newState)
 
     local function applyMutedState()
@@ -220,9 +224,18 @@ local function _vc_toggleMute()
                 if speaker then speaker:SetMuted(newState) end
             end
         end)
+        pcall(function()
+            if VoiceInternal and VoiceInternal.PublishPause then
+                VoiceInternal:PublishPause(newState and true or false)
+            end
+        end)
     end
 
     applyMutedState()
+    if (not newState) and _vc_FLUSH_ON_UNMUTE and _vc_mutedAt > 0
+        and (tick() - _vc_mutedAt) >= _vc_FLUSH_MIN_MUTE then
+        _vc_flushVoicePipeline()
+    end
     task.delay(0.10, applyMutedState)
     task.delay(0.35, applyMutedState)
     task.delay(0.55, function()
@@ -354,31 +367,44 @@ end
 
 
 local function _vc_downloadIcons()
-    if not isfolder("assets") then safeMakeFolder("assets") end
-    local urls = {
-        { "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/Icons/ANTIVCBAN-Unmuted-Icon.png", "assets/TL_Unmuted.png", "unmuted" },
-        { "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/Icons/ANTIVCBAN-Mute-Icon.png", "assets/TL_Muted.png", "muted" },
-    }
-    for _, entry in pairs(urls) do
-        task.spawn(function()
-            pcall(function()
-                if not safeIsFile(entry[2]) then
-                    local data = (game :: any):HttpGet(entry[1])
-                    if data then safeWriteFile(entry[2], data) end
-                end
-                local asset = safeGetCustomAsset(entry[2])
-                if asset then
-                    if entry[3] == "unmuted" then
-                        UNMUTED_ASSET = asset
-                        if _vc_unmutedIcon then _vc_unmutedIcon.Image = asset end
-                    else
-                        MUTED_ASSET = asset
-                        if _vc_mutedIcon then _vc_mutedIcon.Image = asset end
-                    end
-                end
-            end)
+    local folderName = "assets"
+    pcall(function()
+        if not isfolder(folderName) then makefolder(folderName) end
+    end)
+
+    local function loadIcon(fileName, imageUrl, fallback)
+        local fullPath = folderName .. "/" .. fileName
+        pcall(function()
+            if not isfile(fullPath) then
+                writefile(fullPath, game:HttpGet(imageUrl))
+            end
         end)
+        local getAsset = getcustomasset or getsynasset
+        local _getcustomassetid = rawget(_G, "getcustomassetid")
+        if not getAsset and _getcustomassetid then getAsset = _getcustomassetid end
+        if getAsset then
+            local ok, asset = pcall(getAsset, fullPath)
+            if ok and asset and asset ~= "" then return asset end
+        end
+        return fallback
     end
+
+    local unmuted = loadIcon(
+        "TL_Unmuted.png",
+        "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/TL-DEFAULT/ANTIVCBAN-Unmuted-Icon.png",
+        "rbxasset://textures/ui/VoiceChat/MicLight/Unmuted0.png"
+    )
+    local muted = loadIcon(
+        "TL_Muted.png",
+        "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/TL-DEFAULT/ANTIVCBAN-Mute-Icon.png",
+        "rbxasset://textures/ui/VoiceChat/MicLight/Muted.png"
+    )
+
+    UNMUTED_ASSET = unmuted
+    MUTED_ASSET = muted
+
+    if _vc_unmutedIcon then _vc_unmutedIcon.Image = unmuted end
+    if _vc_mutedIcon then _vc_mutedIcon.Image = muted end
 end
 
 
@@ -438,7 +464,6 @@ local function _vc_executeAntiVCBan()
     _vc_buildTopBarMic()
     _vc_downloadIcons()
 
-    task.wait(0.5)
     local adi = _vc_getADI()
     if adi and _vc_unmutedIcon and _vc_mutedIcon then
         _vc_applyIconState(adi.Muted == true)
@@ -526,5 +551,7 @@ end
 if GLOBAL_ENV then
     GLOBAL_ENV.__TL_AntiVCBAN = API
 end
+
+task.spawn(function() API.start() end)
 
 return API
