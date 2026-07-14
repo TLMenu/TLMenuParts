@@ -1,3 +1,11 @@
+-- ════════════════════════════════════════════════════════════════════════════
+--  TLEX ByteBreaker V2 — Refactored Attach System
+--  • Unified state management
+--  • Performance-optimized caching
+--  • Modular oscillator system
+--  • Proper error handling & logging
+-- ════════════════════════════════════════════════════════════════════════════
+
 local M = {}
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -14,6 +22,13 @@ local CFG = {
 	VELOCITY_THRESHOLD = 0.5,
 	ANIMATION_RETRY_DELAY = 0.1,
 	RESPAWN_WAIT = 0.5,
+	
+	-- ═══ NEW: Smooth interpolation ═══
+	INTERPOLATION_ALPHA = 0, -- 0 = instant (0-delay), 0.1-0.5 = smooth
+	
+	-- ═══ NEW: Velocity matching ═══
+	MATCH_TARGET_VELOCITY = false,
+	VELOCITY_MATCH_FACTOR = 0.8, -- 0-1, how much to match
 }
 
 local ANIM_IDS = {
@@ -157,6 +172,12 @@ local State = {
 	rakHooked = false,
 	rakHookFn = nil,
 	lastError = nil,
+	
+	-- ═══ NEW: Network ownership tracking ═══
+	ownershipSet = false,
+	
+	-- ═══ NEW: Collision group tracking ═══
+	collisionGroupSetup = false,
 }
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -167,6 +188,7 @@ local Deps = {
 	LocalPlayer = nil,
 	RunService = nil,
 	Players = nil,
+	PhysicsService = nil,
 	sethiddenproperty = nil,
 	raknet = nil,
 	sendNotif = nil,
@@ -220,6 +242,10 @@ local function refreshMyCache()
 		State.myHRP = char and char:FindFirstChild("HumanoidRootPart")
 		State.myHum = getHumanoid(char)
 		if State.myHRP then State.lastSafeY = State.myHRP.Position.Y end
+		
+		-- ═══ NEW: Reset ownership flag on character change ═══
+		State.ownershipSet = false
+		State.collisionGroupSetup = false
 	end
 end
 
@@ -272,6 +298,54 @@ local function clearVelocity(hrp)
 	end, "clearVelocity")
 end
 
+-- ═══ NEW: Collision group system ═══
+local function setupCollisionGroup()
+	if State.collisionGroupSetup or not Deps.PhysicsService then return end
+	
+	safe(function()
+		local PhysicsService = Deps.PhysicsService
+		
+		-- Create collision group if doesn't exist
+		local groupExists = pcall(function()
+			PhysicsService:GetCollisionGroupId("BBAttach")
+		end)
+		
+		if not groupExists then
+			PhysicsService:CreateCollisionGroup("BBAttach")
+			PhysicsService:CollisionGroupSetCollidable("BBAttach", "BBAttach", false)
+		end
+		
+		-- Assign all character parts to group
+		if State.myChar then
+			for _, part in ipairs(State.myChar:GetDescendants()) do
+				if part:IsA("BasePart") then
+					PhysicsService:SetPartCollisionGroup(part, "BBAttach")
+				end
+			end
+		end
+		
+		State.collisionGroupSetup = true
+	end, "setupCollisionGroup")
+end
+
+local function resetCollisionGroup()
+	if not State.collisionGroupSetup or not Deps.PhysicsService then return end
+	
+	safe(function()
+		local PhysicsService = Deps.PhysicsService
+		
+		if State.myChar then
+			for _, part in ipairs(State.myChar:GetDescendants()) do
+				if part:IsA("BasePart") then
+					PhysicsService:SetPartCollisionGroup(part, "Default")
+				end
+			end
+		end
+		
+		State.collisionGroupSetup = false
+	end, "resetCollisionGroup")
+end
+
 local function disableCollision(char)
 	safe(function()
 		for _, part in ipairs(char:GetDescendants()) do
@@ -286,6 +360,19 @@ local function enableCollision(char)
 			if part:IsA("BasePart") then part.CanCollide = true end
 		end
 	end, "enableCollision")
+end
+
+-- ═══ NEW: Network ownership optimization ═══
+local function ensureNetworkOwnership()
+	if State.ownershipSet or not State.myHRP then return end
+	
+	local ok = safe(function()
+		State.myHRP:SetNetworkOwner(Deps.LocalPlayer)
+	end, "ensureNetworkOwnership")
+	
+	if ok then
+		State.ownershipSet = true
+	end
 end
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -553,8 +640,16 @@ local function bindRespawnHandlers()
 		if not State.active then return end
 		task.wait(CFG.RESPAWN_WAIT)
 		refreshMyCache()
-		disableCollision(char)
+		
+		-- ═══ NEW: Re-setup collision group on respawn ═══
+		if Deps.PhysicsService then
+			setupCollisionGroup()
+		else
+			disableCollision(char)
+		end
+		
 		setupHealthProtection()
+		ensureNetworkOwnership()
 		
 		local savedMode = State.mode
 		local savedTarget = State.target
@@ -607,6 +702,9 @@ local function onHeartbeat(dt)
 		refreshMyCache()
 		refreshTargetCache()
 		checkDetachDistance()
+		
+		-- ═══ NEW: Periodic ownership check ═══
+		ensureNetworkOwnership()
 	end
 	
 	-- Health check
@@ -629,10 +727,22 @@ local function onHeartbeat(dt)
 	local tHRP = State.targetHRP
 	if not myHRP or not tHRP or not tHRP.Parent then return end
 	
-	-- Velocity control
-	local vel = myHRP.AssemblyLinearVelocity
-	if vel.Magnitude > CFG.VELOCITY_THRESHOLD then
-		clearVelocity(myHRP)
+	-- ═══ NEW: Velocity matching ═══
+	if CFG.MATCH_TARGET_VELOCITY then
+		local targetVel = tHRP.AssemblyLinearVelocity
+		if targetVel.Magnitude > CFG.VELOCITY_THRESHOLD then
+			safe(function()
+				myHRP.AssemblyLinearVelocity = targetVel * CFG.VELOCITY_MATCH_FACTOR
+			end, "onHeartbeat:velocityMatch")
+		else
+			clearVelocity(myHRP)
+		end
+	else
+		-- Original behavior: clear velocity if moving
+		local vel = myHRP.AssemblyLinearVelocity
+		if vel.Magnitude > CFG.VELOCITY_THRESHOLD then
+			clearVelocity(myHRP)
+		end
 	end
 	
 	-- Position update
@@ -642,7 +752,12 @@ local function onHeartbeat(dt)
 	local targetCF = calculateTargetCFrame(State.mode, modeData, dt)
 	if targetCF then
 		safe(function()
-			myHRP.CFrame = targetCF
+			-- ═══ NEW: Smooth interpolation (optional) ═══
+			if CFG.INTERPOLATION_ALPHA > 0 then
+				myHRP.CFrame = myHRP.CFrame:Lerp(targetCF, CFG.INTERPOLATION_ALPHA)
+			else
+				myHRP.CFrame = targetCF -- instant (0-delay preserved)
+			end
 		end, "onHeartbeat:position")
 	end
 	
@@ -684,8 +799,16 @@ function M.startBB(targetPlayer, modeKey)
 	
 	-- Setup
 	setupRaknetHook()
-	disableCollision(State.myChar)
+	
+	-- ═══ NEW: Prefer collision group, fallback to CanCollide ═══
+	if Deps.PhysicsService then
+		setupCollisionGroup()
+	else
+		disableCollision(State.myChar)
+	end
+	
 	setupHealthProtection()
+	ensureNetworkOwnership() -- ═══ NEW: Set ownership once at start ═══
 	
 	safe(function()
 		State.myHum.PlatformStand = true
@@ -768,8 +891,11 @@ function M.stopBB()
 		end, "stopBB:cleanup Humanoid")
 	end
 	
-	if myChar then
-		enableCollision(myChar)
+	-- ═══ NEW: Reset collision group ═══
+	if Deps.PhysicsService then
+		resetCollisionGroup()
+	else
+		if myChar then enableCollision(myChar) end
 	end
 	
 	-- Reset state
@@ -780,6 +906,7 @@ function M.stopBB()
 	State.cacheCheckAcc = 0
 	State.lastSafeY = 0
 	State.lastDetachFix = 0
+	State.ownershipSet = false
 	
 	-- External hook
 	if Deps._AF then Deps._AF.bbActive = false end
@@ -798,6 +925,7 @@ function M.initBB(cfg)
 	Deps.LocalPlayer = cfg.LocalPlayer or game:GetService("Players").LocalPlayer
 	Deps.RunService = cfg.RunService or game:GetService("RunService")
 	Deps.Players = cfg.Players or game:GetService("Players")
+	Deps.PhysicsService = cfg.PhysicsService or game:GetService("PhysicsService")
 	Deps.sethiddenproperty = cfg.sethiddenproperty or sethiddenproperty
 	Deps.raknet = cfg.raknet
 	Deps.sendNotif = cfg.sendNotif
