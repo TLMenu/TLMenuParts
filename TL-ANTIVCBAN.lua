@@ -1,7 +1,3 @@
-
-
-
-
 local GLOBAL_ENV = (typeof(getgenv) == "function" and getgenv()) or _G
 local RUNTIME_KEY = "__TL_AntiVCBAN_Runtime"
 
@@ -69,6 +65,11 @@ end
 local function safeIsFile(path)
     if type(isfile) ~= "function" then return false end
     local ok, result = pcall(isfile, path)
+    return ok and result == true
+end
+local function safeIsFolder(path)
+    if type(isfolder) ~= "function" then return false end
+    local ok, result = pcall(isfolder, path)
     return ok and result == true
 end
 local function safeMakeFolder(path)
@@ -394,7 +395,8 @@ end
 
 
 local function _vc_downloadIcons()
-    if not isfolder("assets") then safeMakeFolder("assets") end
+    if not safeIsFolder("assets") then safeMakeFolder("assets") end
+    if not safeIsFolder("assets/TL-DEFAULT") then safeMakeFolder("assets/TL-DEFAULT") end
     local urls = {
         { "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/TL-DEFAULT/ANTIVCBAN-Unmuted-Icon.png", "assets/TL-DEFAULT/TL_Unmuted.png", "unmuted" },
         { "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/TL-DEFAULT/ANTIVCBAN-Mute-Icon.png", "assets/TL-DEFAULT/TL_Muted.png", "muted" },
@@ -566,7 +568,5 @@ end
 if GLOBAL_ENV then
     GLOBAL_ENV.__TL_AntiVCBAN = API
 end
-
-task.spawn(function() API.start() end)
 
 return API
