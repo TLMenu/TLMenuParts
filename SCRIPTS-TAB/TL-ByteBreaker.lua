@@ -826,12 +826,4 @@ end
 M._bbMode_ = function() return State.mode end
 M._bbTarget_ = function() return State.target end
 
--- Legacy stubs: old TLMenu.lua calls these; V2 has no QABar
-M.initQABar = function(_cfg) end
-M.startQABar = function() end
-M.stopQAAction = function() end
-M.activateQAAction = function() return false end
-M.qaStartNoSit = function() end
-M.qaStopNoSit = function() end
-
 return M
