@@ -19,46 +19,41 @@ runtime.cleanup = function()
 end
 if GLOBAL_ENV then GLOBAL_ENV[RUNTIME_KEY] = runtime end
 
-local Players         = game:GetService("Players")
-local RunService      = game:GetService("RunService")
-local TweenService    = game:GetService("TweenService")
-local CoreGui         = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
 local VoiceChatService = game:GetService("VoiceChatService")
-local VoiceInternal   = (pcall(function() return game:GetService("VoiceChatInternal") end) and
+local VoiceInternal = (pcall(function() return game:GetService("VoiceChatInternal") end) and
     game:GetService("VoiceChatInternal")) or nil
 
 local lp = Players.LocalPlayer
-local _getconnections   = rawget(_G, "getconnections")
-local _get_signal_cons  = rawget(_G, "get_signal_cons")
-local get_conns         = _getconnections or _get_signal_cons or nil
+local _getconnections = rawget(_G, "getconnections")
+local _get_signal_cons = rawget(_G, "get_signal_cons")
+local get_conns = _getconnections or _get_signal_cons or nil
 
--- ── State ────────────────────────────────────────────────────────────────────
-local _vc_active        = false
-local _vc_connections   = {}
-local _vc_currentADI    = nil
+
+local _vc_active = false
+local _vc_connections = {}
+local _vc_currentADI = nil
 local _vc_lastADISearch = 0
-local _vc_micGui        = nil
-local _vc_unmutedIcon   = nil
-local _vc_mutedIcon     = nil
+local _vc_micGui = nil
+local _vc_unmutedIcon = nil
+local _vc_mutedIcon = nil
 local _vc_iconContainer = nil
-local _vc_lastMuted     = nil
-local _vc_clickLock     = false
-local _vc_lastToggleAt  = 0
-local _vc_desiredMuted  = nil
-local _vc_hiddenIcons   = setmetatable({}, { __mode = "k" })
+local _vc_lastMuted = nil
+local _vc_clickLock = false
+local _vc_lastToggleAt = 0
+local _vc_desiredMuted = nil
+local _vc_hiddenIcons = setmetatable({}, { __mode = "k" })
 
--- Fallback URLs (HTTP image, used until local asset is ready)
-local UNMUTED_URL = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/TL-DEFAULT/ANTIVCBAN-Unmuted-Icon.png"
-local MUTED_URL   = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/TL-DEFAULT/ANTIVCBAN-Mute-Icon.png"
--- Asset refs in a table — mutable upvalue shared across all closures, no "unused local" warning
-local _vc_assets  = { unmuted = UNMUTED_URL, muted = MUTED_URL }
-local UNMUTED_ASSET = nil
-local MUTED_ASSET   = nil
+local UNMUTED_ASSET = "rbxasset://textures/ui/VoiceChat/MicLight/Unmuted0.png"
+local MUTED_ASSET = "rbxasset://textures/ui/VoiceChat/MicLight/Muted.png"
 
--- ── Notifications ─────────────────────────────────────────────────────────────
+
 local _sendNotif = nil
 local function notify(title, text, duration)
-    if _sendNotif then _sendNotif(title, text, duration) return end
+    if _sendNotif then _sendNotif(title, text, duration); return end
     pcall(function()
         game:GetService("StarterGui"):SetCore("SendNotification", {
             Title = title, Text = text, Duration = duration or 3
@@ -66,138 +61,18 @@ local function notify(title, text, duration)
     end)
 end
 
--- ── Filesystem helpers ────────────────────────────────────────────────────────
-local function safeIsFile(path)
-    if type(isfile) ~= "function" then return false end
-    local ok, result = pcall(isfile, path)
-    return ok and result == true
-end
-local function safeIsFolder(path)
-    if type(isfolder) ~= "function" then return false end
-    local ok, result = pcall(isfolder, path)
-    return ok and result == true
-end
-local function safeMakeFolder(path)
-    if type(makefolder) ~= "function" then return false end
-    return pcall(makefolder, path)
-end
-local function safeWriteFile(path, bytes)
-    if type(writefile) ~= "function" then return false end
-    return pcall(writefile, path, bytes)
-end
-local function safeGetCustomAsset(path)
-    if type(getcustomasset) == "function" then
-        local ok, asset = pcall(getcustomasset, path)
-        if ok and asset and asset ~= "" then return asset end
-    end
-    if type(getsynasset) == "function" then
-        local ok, asset = pcall(getsynasset, path)
-        if ok and asset and asset ~= "" then return asset end
-    end
-    return nil
-end
 
--- ── Icon download + apply ─────────────────────────────────────────────────────
---  Runs entirely in its own thread. Never blocks anything.
---  Flow per icon:
---    1. Ensure assets/ folder exists
---    2. Download via HttpGet if file not on disk yet
---    3. writefile → flush wait → getcustomasset with retry
---    4. On success: update ASSET variable AND ImageLabel.Image immediately
---    5. On failure: ImageLabel keeps the HTTP fallback URL (already set in _vc_buildTopBarMic)
-local function _vc_downloadIcons()
-    task.spawn(function()
-        -- Ensure folder
-        if not safeIsFolder("assets") then
-            safeMakeFolder("assets")
-            task.wait(0.05)
-        end
 
-        local icons = {
-            {
-                url  = UNMUTED_URL,
-                path = "assets/TL_Unmuted.png",
-                key  = "unmuted",
-            },
-            {
-                url  = MUTED_URL,
-                path = "assets/TL_Muted.png",
-                key  = "muted",
-            },
-        }
 
-        for _, entry in ipairs(icons) do
-            task.spawn(function()
-                -- Step 1: download if missing
-                if not safeIsFile(entry.path) then
-                    local ok, data = pcall(function()
-                        return (game :: any):HttpGet(entry.url)
-                    end)
-                    if not (ok and type(data) == "string" and #data > 4) then
-                        warn("[ANTIVCBAN] Download fehlgeschlagen: " .. entry.path)
-                        -- Fallback URL bleibt gesetzt (wurde in _vc_buildTopBarMic gesetzt)
-                        return
-                    end
-                    local wOk = safeWriteFile(entry.path, data)
-                    if not wOk then
-                        warn("[ANTIVCBAN] writefile fehlgeschlagen: " .. entry.path)
-                        return
-                    end
-                    -- Flush-Wait: Executor braucht etwas Zeit bis Datei lesbar ist
-                    task.wait(0.15)
-                end
 
-                -- Step 2: getcustomasset mit exponentiellem Retry
-                local asset = nil
-                for attempt = 1, 8 do
-                    asset = safeGetCustomAsset(entry.path)
-                    if asset then break end
-                    -- Datei nochmal prüfen — auf manchen Executoren muss man re-write
-                    if attempt == 4 and safeIsFile(entry.path) then
-                        -- Re-download und neu schreiben erzwingt Cache-Refresh
-                        local ok2, data2 = pcall(function()
-                            return (game :: any):HttpGet(entry.url)
-                        end)
-                        if ok2 and type(data2) == "string" and #data2 > 4 then
-                            safeWriteFile(entry.path, data2)
-                            task.wait(0.2)
-                        end
-                    end
-                    task.wait(0.15 * attempt) -- 0.15, 0.30, 0.45, 0.60 ...
-                end
-
-                if not asset then
-                    warn("[ANTIVCBAN] getcustomasset fehlgeschlagen nach 8 Versuchen: " .. entry.path
-                         .. " — Fallback URL bleibt aktiv")
-                    return
-                end
-
-                -- Step 3: Asset anwenden
-                if entry.key == "unmuted" then
-                    UNMUTED_ASSET = asset
-                    if _vc_unmutedIcon and _vc_unmutedIcon.Parent then
-                        _vc_unmutedIcon.Image = asset
-                    end
-                else
-                    MUTED_ASSET = asset
-                    if _vc_mutedIcon and _vc_mutedIcon.Parent then
-                        _vc_mutedIcon.Image = asset
-                    end
-                end
-            end)
-        end
-    end)
-end
-
--- ── Voice connection management ───────────────────────────────────────────────
 local _vcCachedTargets, _vcLastFetch = nil, 0
 local function _vc_fetchVoiceTargets()
     if _vcCachedTargets and tick() - _vcLastFetch < 15 then return _vcCachedTargets end
     local targets = {}
     if get_conns then
         local signalList = {
-            { VoiceInternal,    "StateChanged" },
-            { VoiceInternal,    "Participants" },
+            { VoiceInternal, "StateChanged" },
+            { VoiceInternal, "Participants" },
             { VoiceChatService, "StateChanged" },
             { VoiceChatService, "PlayerMicStateChanged" },
         }
@@ -207,7 +82,7 @@ local function _vc_fetchVoiceTargets()
                 pcall(function()
                     local sig = (evName == "Participants")
                         and inst:GetPropertyChangedSignal("Participants")
-                        or  inst[evName]
+                        or inst[evName]
                     if sig then
                         local conns = get_conns(sig)
                         if conns and #conns > 0 then
@@ -219,7 +94,7 @@ local function _vc_fetchVoiceTargets()
         end
     end
     _vcCachedTargets = targets
-    _vcLastFetch     = tick()
+    _vcLastFetch = tick()
     return targets
 end
 
@@ -236,7 +111,7 @@ local function _vc_manageConnections()
     end
 end
 
--- ── AudioDeviceInput ──────────────────────────────────────────────────────────
+
 local function _vc_getADI()
     if _vc_currentADI and _vc_currentADI.Parent then return _vc_currentADI end
     local now = tick()
@@ -256,23 +131,22 @@ local function _vc_getADI()
     return _vc_currentADI
 end
 
--- ── Icon state ────────────────────────────────────────────────────────────────
+
 local function _vc_applyIconState(muted)
-    muted        = muted == true
+    muted = muted == true
     _vc_lastMuted = muted
     if _vc_unmutedIcon and _vc_mutedIcon then
         _vc_unmutedIcon.Visible = not muted
-        _vc_mutedIcon.Visible   = muted
+        _vc_mutedIcon.Visible = muted
     end
 end
 
--- ── Voice pipeline flush ──────────────────────────────────────────────────────
+
 local _vc_VOICE_REJOIN_GAP = 0.5
 local _vc_FLUSH_ON_UNMUTE  = true
 local _vc_FLUSH_MIN_MUTE   = 8
 local _vc_mutedAt          = 0
 local _vc_flushing         = false
-
 local function _vc_flushVoicePipeline()
     if _vc_flushing then return end
     _vc_flushing = true
@@ -286,10 +160,8 @@ local function _vc_flushVoicePipeline()
                 if _vc_desiredMuted then break end
                 local live = false
                 pcall(function()
-                    if VoiceInternal and VoiceInternal.PublishPause  then VoiceInternal:PublishPause(false) end
-                    if VoiceInternal and VoiceInternal.IsPublishPaused then
-                        live = (VoiceInternal:IsPublishPaused() == false)
-                    end
+                    if VoiceInternal and VoiceInternal.PublishPause then VoiceInternal:PublishPause(false) end
+                    if VoiceInternal and VoiceInternal.IsPublishPaused then live = (VoiceInternal:IsPublishPaused() == false) end
                 end)
                 if live then break end
             end
@@ -299,7 +171,7 @@ local function _vc_flushVoicePipeline()
     end)
 end
 
--- ── Toggle mute ───────────────────────────────────────────────────────────────
+
 local function _vc_toggleMute()
     local adi = _vc_getADI()
     local currentMuted = false
@@ -309,16 +181,18 @@ local function _vc_toggleMute()
         elseif _vc_lastMuted ~= nil then currentMuted = _vc_lastMuted == true end
     end)
 
-    local newState      = not currentMuted
-    _vc_desiredMuted    = newState
-    _vc_lastToggleAt    = tick()
+    local newState = not currentMuted
+    _vc_desiredMuted = newState
+    _vc_lastToggleAt = tick()
     if newState then _vc_mutedAt = tick() end
     _vc_applyIconState(newState)
 
     local function applyMutedState()
         local currentAdi = _vc_getADI()
         local apiApplied = false
-        if currentAdi then pcall(function() currentAdi.Muted = newState end) end
+        if currentAdi then
+            pcall(function() currentAdi.Muted = newState end)
+        end
         pcall(function()
             if VoiceChatService and VoiceChatService.SetSelfMuted then
                 VoiceChatService:SetSelfMuted(newState); apiApplied = true
@@ -330,8 +204,7 @@ local function _vc_toggleMute()
             end
         end)
         pcall(function()
-            if not apiApplied and VoiceChatService and VoiceChatService.ToggleMute
-                and currentAdi and currentAdi.Muted ~= newState then
+            if not apiApplied and VoiceChatService and VoiceChatService.ToggleMute and currentAdi and currentAdi.Muted ~= newState then
                 VoiceChatService:ToggleMute()
             end
         end)
@@ -377,79 +250,77 @@ local function _vc_toggleMute()
     end)
 end
 
--- ── Tween helpers ─────────────────────────────────────────────────────────────
+
 local _hoverInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local _clickInfo = TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 local function _vc_tweenScale(uiScale, targetScale, info)
-    local tw = TweenService:Create(uiScale, info or _hoverInfo, { Scale = targetScale })
+    info = info or _hoverInfo
+    local tw = TweenService:Create(uiScale, info, { Scale = targetScale })
     tw:Play()
     return tw
 end
 
--- ── Build TopBar mic GUI ──────────────────────────────────────────────────────
+
 local function _vc_buildTopBarMic()
     local old = CoreGui:FindFirstChild("TL_TopBarMic")
     if old then old:Destroy() end
 
     local gui = Instance.new("ScreenGui")
-    gui.Name            = "TL_TopBarMic"
-    gui.ResetOnSpawn    = false
-    gui.IgnoreGuiInset  = true
-    gui.ZIndexBehavior  = Enum.ZIndexBehavior.Sibling
-    gui.DisplayOrder    = 999
-    gui.Parent          = CoreGui
-    _vc_micGui          = gui
+    gui.Name = "TL_TopBarMic"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    gui.DisplayOrder = 999
+    gui.Parent = CoreGui
+    _vc_micGui = gui
     table.insert(runtime.instances, gui)
 
     local btn = Instance.new("ImageButton")
-    btn.Name                 = "MicButton"
-    btn.AnchorPoint          = Vector2.new(0.5, 0.5)
-    btn.Position             = UDim2.new(0, 165 + 23, 0, 13 + 21)
-    btn.Size                 = UDim2.new(0, 43, 0, 43)
+    btn.Name = "MicButton"
+    btn.AnchorPoint = Vector2.new(0.5, 0.5)
+    btn.Position = UDim2.new(0, 188, 0, 34)
+    btn.Size = UDim2.new(0, 43, 0, 43)
     btn.BackgroundTransparency = 1
-    btn.BorderSizePixel      = 0
-    btn.Image                = ""
-    btn.AutoButtonColor      = false
-    btn.Active               = true
-    btn.Selectable           = true
-    btn.ZIndex               = 100
-    btn.Parent               = gui
+    btn.BorderSizePixel = 0
+    btn.Image = ""
+    btn.AutoButtonColor = false
+    btn.Active = true
+    btn.Selectable = true
+    btn.ZIndex = 100
+    btn.Parent = gui
 
     _vc_iconContainer = Instance.new("Frame")
-    _vc_iconContainer.Name               = "IconContainer"
-    _vc_iconContainer.Size               = UDim2.new(1, 0, 1, 0)
+    _vc_iconContainer.Name = "IconContainer"
+    _vc_iconContainer.Size = UDim2.new(1, 0, 1, 0)
     _vc_iconContainer.BackgroundTransparency = 1
-    _vc_iconContainer.ZIndex             = 101
-    _vc_iconContainer.Parent             = btn
+    _vc_iconContainer.ZIndex = 101
+    _vc_iconContainer.Parent = btn
 
     local uiScale = Instance.new("UIScale")
-    uiScale.Name   = "ScaleAnim"
-    uiScale.Scale  = 1
+    uiScale.Name = "ScaleAnim"
+    uiScale.Scale = 1
     uiScale.Parent = _vc_iconContainer
 
-    -- ImageLabels start with HTTP URL as fallback.
-    -- _vc_downloadIcons() will replace .Image with the local getcustomasset result
-    -- as soon as it is available, without any visible flicker.
     _vc_unmutedIcon = Instance.new("ImageLabel")
-    _vc_unmutedIcon.Name               = "UnmutedIcon"
-    _vc_unmutedIcon.Size               = UDim2.new(1, 0, 1, 0)
+    _vc_unmutedIcon.Name = "UnmutedIcon"
+    _vc_unmutedIcon.Size = UDim2.new(1, 0, 1, 0)
     _vc_unmutedIcon.BackgroundTransparency = 1
-    _vc_unmutedIcon.Image              = UNMUTED_URL   -- HTTP fallback
-    _vc_unmutedIcon.ScaleType          = Enum.ScaleType.Fit
-    _vc_unmutedIcon.Visible            = true
-    _vc_unmutedIcon.ZIndex             = 102
-    _vc_unmutedIcon.Parent             = _vc_iconContainer
+    _vc_unmutedIcon.Image = UNMUTED_ASSET
+    _vc_unmutedIcon.ScaleType = Enum.ScaleType.Fit
+    _vc_unmutedIcon.Visible = true
+    _vc_unmutedIcon.ZIndex = 102
+    _vc_unmutedIcon.Parent = _vc_iconContainer
 
     _vc_mutedIcon = Instance.new("ImageLabel")
-    _vc_mutedIcon.Name               = "MutedIcon"
-    _vc_mutedIcon.Size               = UDim2.new(1, 0, 1, 0)
+    _vc_mutedIcon.Name = "MutedIcon"
+    _vc_mutedIcon.Size = UDim2.new(1, 0, 1, 0)
     _vc_mutedIcon.BackgroundTransparency = 1
-    _vc_mutedIcon.Image              = MUTED_URL       -- HTTP fallback
-    _vc_mutedIcon.ScaleType          = Enum.ScaleType.Fit
-    _vc_mutedIcon.Visible            = false
-    _vc_mutedIcon.ZIndex             = 102
-    _vc_mutedIcon.Parent             = _vc_iconContainer
+    _vc_mutedIcon.Image = MUTED_ASSET
+    _vc_mutedIcon.ScaleType = Enum.ScaleType.Fit
+    _vc_mutedIcon.Visible = false
+    _vc_mutedIcon.ZIndex = 102
+    _vc_mutedIcon.Parent = _vc_iconContainer
 
     local function _vc_handleMicClick(targetScale)
         if _vc_clickLock then return end
@@ -462,43 +333,82 @@ local function _vc_buildTopBarMic()
     end
 
     local hitbox = Instance.new("TextButton")
-    hitbox.Name                 = "MicHitbox"
-    hitbox.Size                 = UDim2.new(1, 0, 1, 0)
+    hitbox.Name = "MicHitbox"
+    hitbox.Size = UDim2.new(1, 0, 1, 0)
     hitbox.BackgroundTransparency = 1
-    hitbox.Text                 = ""
-    hitbox.AutoButtonColor      = false
-    hitbox.Active               = true
-    hitbox.Selectable           = true
-    hitbox.ZIndex               = 103
-    hitbox.Parent               = btn
+    hitbox.Text = ""
+    hitbox.AutoButtonColor = false
+    hitbox.Active = true
+    hitbox.Selectable = true
+    hitbox.ZIndex = 103
+    hitbox.Parent = btn
 
-    btn.MouseButton1Down:Connect(function()    _vc_handleMicClick(1.1) end)
+    btn.MouseButton1Down:Connect(function() _vc_handleMicClick(1.1) end)
     hitbox.MouseButton1Down:Connect(function() _vc_handleMicClick(1.1) end)
-    btn.MouseButton1Click:Connect(function()    _vc_handleMicClick(1.1) end)
+    btn.MouseButton1Click:Connect(function() _vc_handleMicClick(1.1) end)
     hitbox.MouseButton1Click:Connect(function() _vc_handleMicClick(1.1) end)
-    btn.TouchTap:Connect(function()    _vc_handleMicClick(1) end)
+    btn.TouchTap:Connect(function() _vc_handleMicClick(1) end)
     hitbox.TouchTap:Connect(function() _vc_handleMicClick(1) end)
     btn.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.Touch then
-            _vc_handleMicClick(
-                input.UserInputType == Enum.UserInputType.MouseButton1 and 1.1 or 1)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            _vc_handleMicClick(input.UserInputType == Enum.UserInputType.MouseButton1 and 1.1 or 1)
         end
     end)
     hitbox.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.Touch then
-            _vc_handleMicClick(
-                input.UserInputType == Enum.UserInputType.MouseButton1 and 1.1 or 1)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            _vc_handleMicClick(input.UserInputType == Enum.UserInputType.MouseButton1 and 1.1 or 1)
         end
     end)
-    btn.MouseEnter:Connect(function()    _vc_tweenScale(uiScale, 1.1) end)
-    btn.MouseLeave:Connect(function()    _vc_tweenScale(uiScale, 1)   end)
+    btn.MouseEnter:Connect(function() _vc_tweenScale(uiScale, 1.1) end)
+    btn.MouseLeave:Connect(function() _vc_tweenScale(uiScale, 1) end)
     hitbox.MouseEnter:Connect(function() _vc_tweenScale(uiScale, 1.1) end)
-    hitbox.MouseLeave:Connect(function() _vc_tweenScale(uiScale, 1)   end)
+    hitbox.MouseLeave:Connect(function() _vc_tweenScale(uiScale, 1) end)
 end
 
--- ── Hide original Roblox mic icons ───────────────────────────────────────────
+
+local function _vc_downloadIcons()
+    local folderName = "assets/TL-DEFAULT"
+    pcall(function()
+        if not isfolder("assets") then makefolder("assets") end
+        if not isfolder(folderName) then makefolder(folderName) end
+    end)
+
+    local function loadIcon(fileName, imageUrl, fallback)
+        local fullPath = folderName .. "/" .. fileName
+        pcall(function()
+            if not isfile(fullPath) then
+                writefile(fullPath, game:HttpGet(imageUrl))
+            end
+        end)
+        local getAsset = getcustomasset or getsynasset
+        local _getcustomassetid = rawget(_G, "getcustomassetid")
+        if not getAsset and _getcustomassetid then getAsset = _getcustomassetid end
+        if getAsset then
+            local ok, asset = pcall(getAsset, fullPath)
+            if ok and asset and asset ~= "" then return asset end
+        end
+        return fallback
+    end
+
+    local unmuted = loadIcon(
+        "TL_Unmuted.png",
+        "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/TL-DEFAULT/ANTIVCBAN-Unmuted-Icon.png",
+        "rbxasset://textures/ui/VoiceChat/MicLight/Unmuted0.png"
+    )
+    local muted = loadIcon(
+        "TL_Muted.png",
+        "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/TL-DEFAULT/ANTIVCBAN-Mute-Icon.png",
+        "rbxasset://textures/ui/VoiceChat/MicLight/Muted.png"
+    )
+
+    UNMUTED_ASSET = unmuted
+    MUTED_ASSET = muted
+
+    if _vc_unmutedIcon then _vc_unmutedIcon.Image = unmuted end
+    if _vc_mutedIcon then _vc_mutedIcon.Image = muted end
+end
+
+
 local function _vc_hideOriginalTopBarMic()
     for _, sg in ipairs(CoreGui:GetChildren()) do
         if sg:IsA("ScreenGui") and sg.Name ~= "TL_TopBarMic" then
@@ -507,9 +417,9 @@ local function _vc_hideOriginalTopBarMic()
                 for _, v in ipairs(sg:GetDescendants()) do
                     if v:IsA("GuiObject") and not _vc_hiddenIcons[v] then
                         local vn = v.Name:lower()
-                        if vn == "micicon" or vn == "voicechaticon"
+                        if (vn == "micicon" or vn == "voicechaticon"
                             or vn:find("micbutton") or vn:find("voicebutton")
-                            or vn:find("topbar") then
+                            or vn:find("topbar")) then
                             if v:IsA("ImageLabel") or v:IsA("ImageButton") then
                                 pcall(function() v.ImageTransparency = 1 end)
                             end
@@ -525,19 +435,18 @@ local function _vc_hideOriginalTopBarMic()
     end
 end
 
--- ── Mute state sync ───────────────────────────────────────────────────────────
+
 local function _vc_syncMuteState()
     local adi = _vc_getADI()
     if not adi then return end
     local muted = adi.Muted
-    if _vc_desiredMuted ~= nil and muted ~= _vc_desiredMuted
-        and (tick() - _vc_lastToggleAt) < 3 then return end
+    if _vc_desiredMuted ~= nil and muted ~= _vc_desiredMuted and (tick() - _vc_lastToggleAt) < 3 then return end
     if _vc_lastMuted == muted then return end
     _vc_desiredMuted = muted
     _vc_applyIconState(muted)
 end
 
--- ── Main executor ─────────────────────────────────────────────────────────────
+
 local function _vc_executeAntiVCBan()
     pcall(function() VoiceChatService:leaveVoice() end)
     task.wait(2.3)
@@ -553,32 +462,28 @@ local function _vc_executeAntiVCBan()
         end
     end
 
-    -- 1. GUI aufbauen (Icons starten mit HTTP-Fallback-URL, sofort sichtbar)
     _vc_buildTopBarMic()
-
-    -- 2. Lokale Icons im Hintergrund laden + auf ImageLabels anwenden sobald fertig
     _vc_downloadIcons()
 
-    -- 3. Initialen Mute-State anzeigen
     local adi = _vc_getADI()
     if adi and _vc_unmutedIcon and _vc_mutedIcon then
         _vc_applyIconState(adi.Muted == true)
     end
 
-    -- 4. Heartbeat: Mute-State synct alle 0.1s
+    
     local _vcLastSync, _vcInSync = 0, false
     table.insert(_vc_connections, RunService.Heartbeat:Connect(function()
         if _vcInSync then return end
         local now = tick()
         if now - _vcLastSync >= 0.1 then
             _vcLastSync = now
-            _vcInSync   = true
+            _vcInSync = true
             pcall(_vc_syncMuteState)
             _vcInSync = false
         end
     end))
 
-    -- 5. Connection-Manager alle 3s
+    
     table.insert(_vc_connections, task.spawn(function()
         while _vc_active do
             pcall(_vc_manageConnections)
@@ -586,7 +491,7 @@ local function _vc_executeAntiVCBan()
         end
     end))
 
-    -- 6. Originales Roblox-Mic verstecken
+    
     task.spawn(function()
         task.wait(1)
         pcall(_vc_hideOriginalTopBarMic)
@@ -594,7 +499,7 @@ local function _vc_executeAntiVCBan()
         pcall(_vc_hideOriginalTopBarMic)
     end)
 
-    -- 7. Neues Roblox-Mic direkt beim Erscheinen verstecken
+    
     table.insert(_vc_connections, CoreGui.ChildAdded:Connect(function(child)
         if child:IsA("ScreenGui") then
             local n = child.Name:lower()
@@ -605,13 +510,13 @@ local function _vc_executeAntiVCBan()
     end))
 end
 
--- ── Public API ────────────────────────────────────────────────────────────────
+
 local API = {}
 
 function API.start(notifFn)
     if _vc_active then return end
-    _sendNotif  = notifFn or _sendNotif
-    _vc_active  = true
+    _sendNotif = notifFn or _sendNotif
+    _vc_active = true
     _vc_executeAntiVCBan()
     notify("Voice Chat", "Anti-VC Ban aktiv", 3)
 end
@@ -628,8 +533,6 @@ function API.stop()
             _vc_micGui:Destroy(); _vc_micGui = nil
         end
     end)
-    _vc_unmutedIcon = nil
-    _vc_mutedIcon   = nil
     notify("Voice Chat", "Anti-VC Ban deaktiviert", 2)
 end
 
@@ -649,4 +552,5 @@ end
 if GLOBAL_ENV then
     GLOBAL_ENV.__TL_AntiVCBAN = API
 end
+
 return API
