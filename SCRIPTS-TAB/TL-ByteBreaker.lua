@@ -1,5 +1,10 @@
 -- ════════════════════════════════════════════════════════════════════════════
---  TLEX ByteBreaker V2.2 — Anti-Rubber-Band + Stop/Snap Fix
+--  TLEX ByteBreaker V3.0 — Kinematic-Sync Architecture
+--  • PID-Controller CFrame Locking
+--  • LinearVelocity Physics Stack
+--  • Kinematic Target Projection (Look-Ahead)
+--  • Collision Group Isolation
+--  • Adaptive Animation Speed Matching
 -- ════════════════════════════════════════════════════════════════════════════
 
 local M = {}
@@ -9,38 +14,59 @@ local M = {}
 -- ════════════════════════════════════════════════════════════════════════════
 
 local CFG = {
-    VOID_Y                    = -200,
-    RESCUE_Y                  = 50,
-    DETACH_DISTANCE           = 28,
-    HEALTH_CHECK_INTERVAL     = 0.08,
-    CACHE_REFRESH_INTERVAL    = 0.25,
-    POSITION_UPDATE_THROTTLE  = 0,
-    VELOCITY_THRESHOLD        = 0.5,
-    ANIMATION_RETRY_DELAY     = 0.1,
-    RESPAWN_WAIT              = 0.5,
-    INTERPOLATION_ALPHA       = 0,
-    MATCH_TARGET_VELOCITY     = false,
-    VELOCITY_MATCH_FACTOR     = 0.8,
+    VOID_Y                   = -200,
+    RESCUE_Y                 = 50,
+    DETACH_DISTANCE          = 28,
+    HEALTH_CHECK_INTERVAL    = 0.08,
+    CACHE_REFRESH_INTERVAL   = 0.25,
+    VELOCITY_THRESHOLD       = 0.5,
+    ANIMATION_RETRY_DELAY    = 0.1,
+    RESPAWN_WAIT             = 0.5,
+    MATCH_TARGET_VELOCITY    = false,
+    VELOCITY_MATCH_FACTOR    = 0.8,
 
-    ARB_ENABLED               = true,
-    ARB_MAX_CORRECTION        = 8,
-    ARB_HISTORY_SIZE          = 8,
-    ARB_VELOCITY_DAMP         = 0.12,
-    ARB_FREEZE_DURATION       = 0.2,
-    ARB_MAX_FREEZES           = 4,
-    ARB_RESET_COOLDOWN        = 1.5,
+    -- ARB
+    ARB_ENABLED              = true,
+    ARB_MAX_CORRECTION       = 8,
+    ARB_HISTORY_SIZE         = 8,
+    ARB_VELOCITY_DAMP        = 0.12,
+    ARB_FREEZE_DURATION      = 0.2,
+    ARB_MAX_FREEZES          = 4,
+    ARB_RESET_COOLDOWN       = 1.5,
+    ARB_STOP_VEL_THRESHOLD   = 0.8,
+    ARB_STOP_FRAMES          = 3,
 
-    ARB_ALPHA_MIN             = 0.25,
-    ARB_ALPHA_MAX             = 1.0,
-    ARB_ALPHA_DIST_NEAR       = 0.3,
-    ARB_ALPHA_DIST_FAR        = 4.0,
+    -- PID Controller
+    PID_KP                   = 28.0,   -- Proportional gain (spring strength)
+    PID_KI                   = 0.0,    -- Integral gain (drift correction, 0 = off)
+    PID_KD                   = 4.5,    -- Derivative gain (damping / anti-oscillation)
+    PID_MAX_FORCE            = 1e5,    -- Max force output
+    PID_POSITION_DEADZONE    = 0.008,  -- studs, below this = no correction
 
-    ARB_PREDICTION_FACTOR     = 0.85,
-    ARB_PREDICTION_MAX        = 2.5,
+    -- Look-Ahead Projection
+    LOOKAHEAD_FRAMES         = 2,      -- frames to project into future (1-3 recommended)
+    LOOKAHEAD_MAX_OFFSET     = 3.0,    -- max studs projected
 
-    ARB_STOP_VEL_THRESHOLD    = 0.8,
-    ARB_STOP_SNAP_ALPHA       = 1.0,
-    ARB_STOP_FRAMES           = 3,
+    -- Adaptive Animation
+    ANIM_SPEED_IDLE          = 1.0,
+    ANIM_SPEED_MAX           = 2.2,
+    ANIM_SPEED_VEL_SCALE     = 0.12,   -- speed per stud/s of target velocity
+    ANIM_SPEED_SMOOTH        = 0.08,   -- lerp alpha for speed transitions
+
+    -- Collision Group
+    COLLISION_GROUP_NAME     = "BBAttach_V3",
+
+    -- Hard-Attach Modes (no PID, direct CFrame lock)
+    HARD_ATTACH_MODES        = {
+        bb_carry        = true,
+        bb_carryshoulder= true,
+        bb_carry2       = true,
+        bb_piggyback    = true,
+        bb_piggyback2   = true,
+        bb_backpack     = true,
+        bb_headsit      = true,
+        bb_shouldersit  = true,
+    },
 }
 
 local ANIM_IDS = {
@@ -68,36 +94,36 @@ local ANIM_IDS = {
 }
 
 local ATTACH_MODES = {
-    bb_attach        = { x = 0, y = -0.85, z = -2.0, rotX = 20, rotY = 0, rotZ = 0, osc = 1.5, oscSpeed = 10 },
+    bb_attach        = { x = 0,   y = -0.85, z = -2.0, rotX = 20, rotY = 0,   rotZ = 0,  osc = 1.5, oscSpeed = 10 },
     bb_orbit         = { distance = 8, speed = 1.5, type = "orbit" },
     bb_frontwalk     = { distance = 5, facing = "front", type = "follow" },
-    bb_behind        = { distance = 5, facing = "back", type = "follow" },
+    bb_behind        = { distance = 5, facing = "back",  type = "follow" },
     bb_cuffing       = { distance = 1.5, facing = "back", type = "follow" },
-    bb_headsit       = { x = 0, y = 1.4, z = 0, rotX = 90, headRelative = true },
-    bb_copy          = { x = 4, y = 0, z = 0 },
-    bb_piggyback     = { x = 0, y = 0.2, z = 1.1 },
-    bb_backpack      = { x = 0, y = 2.5, z = 1.2 },
-    bb_piggyback2    = { x = 0, y = 0.2, z = 1.1 },
+    bb_headsit       = { x = 0,   y = 1.4,  z = 0,    rotX = 90, headRelative = true },
+    bb_copy          = { x = 4,   y = 0,    z = 0 },
+    bb_piggyback     = { x = 0,   y = 0.2,  z = 1.1 },
+    bb_backpack      = { x = 0,   y = 2.5,  z = 1.2 },
+    bb_piggyback2    = { x = 0,   y = 0.2,  z = 1.1 },
     bb_carry         = { x = 0.5, y = -0.5, z = -1.2 },
-    bb_carryshoulder = { x = 1.8, y = 0.2, z = 0.9 },
-    bb_carry2        = { x = 0.5, y = 1.0, z = -1.2 },
-    bb_hug           = { x = 0, y = 0.05, z = -1.35, rotY = 180, osc = 0.04, oscSpeed = 10 },
-    bb_hug2          = { x = 0, y = 0, z = 1.1 },
-    bb_stand         = { x = -0.8, y = 2, z = 2.2 },
-    bb_layfuck       = { x = 0, y = 0.1, z = 0.9, osc = 0.9, oscSpeed = 12 },
-    bb_headstand     = { x = 0.2, y = 4, z = 0.2 },
-    bb_licking       = { x = 0, y = -1.7, z = -2.5, rotY = 180, osc = 0.4, oscSpeed = 15 },
-    bb_bangv2        = { x = 0, y = 0.2, z = 3.5, osc = 3, oscSpeed = 10, useOscTimer = true },
-    bb_stomach       = { x = 0, y = 0, z = 3.0, rotY = 180 },
-    bb_kiss          = { x = 0, y = 1.5, z = -1.2, rotY = 180, osc = 0.08, oscSpeed = 10 },
-    bb_sucking       = { x = 0, y = -0.4, z = -3.1, rotY = 180, osc = 0.5, oscSpeed = 20 },
-    bb_suck_it       = { x = 0, y = -1.2, z = -2.0, rotY = 180, osc = 1.0, oscSpeed = 12 },
-    bb_backshots     = { x = 0, y = -3.2, z = -2.0, rotX = 20, osc = 1.5, oscSpeed = 10 },
-    bb_doggy         = { x = 0, y = -4.7, z = -0.8, rotX = -90 },
-    bb_pussyspread   = { x = 0, y = -2.45, z = -2.0, osc = 1.5, oscSpeed = 10 },
-    bb_soh           = { y = 1, headRelative = true },
-    bb_shouldersit   = { x = 1.8, y = 2.2, z = 0 },
-    bb_friend        = { x = 3, y = 0, z = 0 },
+    bb_carryshoulder = { x = 1.8, y = 0.2,  z = 0.9 },
+    bb_carry2        = { x = 0.5, y = 1.0,  z = -1.2 },
+    bb_hug           = { x = 0,   y = 0.05, z = -1.35, rotY = 180, osc = 0.04, oscSpeed = 10 },
+    bb_hug2          = { x = 0,   y = 0,    z = 1.1 },
+    bb_stand         = { x = -0.8,y = 2,    z = 2.2 },
+    bb_layfuck       = { x = 0,   y = 0.1,  z = 0.9,  osc = 0.9,  oscSpeed = 12 },
+    bb_headstand     = { x = 0.2, y = 4,    z = 0.2 },
+    bb_licking       = { x = 0,   y = -1.7, z = -2.5, rotY = 180, osc = 0.4,  oscSpeed = 15 },
+    bb_bangv2        = { x = 0,   y = 0.2,  z = 3.5,  osc = 3,    oscSpeed = 10, useOscTimer = true },
+    bb_stomach       = { x = 0,   y = 0,    z = 3.0,  rotY = 180 },
+    bb_kiss          = { x = 0,   y = 1.5,  z = -1.2, rotY = 180, osc = 0.08, oscSpeed = 10 },
+    bb_sucking       = { x = 0,   y = -0.4, z = -3.1, rotY = 180, osc = 0.5,  oscSpeed = 20 },
+    bb_suck_it       = { x = 0,   y = -1.2, z = -2.0, rotY = 180, osc = 1.0,  oscSpeed = 12 },
+    bb_backshots     = { x = 0,   y = -3.2, z = -2.0, rotX = 20,  osc = 1.5,  oscSpeed = 10 },
+    bb_doggy         = { x = 0,   y = -4.7, z = -0.8, rotX = -90 },
+    bb_pussyspread   = { x = 0,   y = -2.45,z = -2.0, osc = 1.5,  oscSpeed = 10 },
+    bb_soh           = { y = 1,   headRelative = true },
+    bb_shouldersit   = { x = 1.8, y = 2.2,  z = 0 },
+    bb_friend        = { x = 3,   y = 0,    z = 0 },
 }
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -123,7 +149,12 @@ local State = {
     lastSafeY           = 0,
     lastDetachFix       = 0,
 
-    bodyMovers          = {},
+    -- V3: Physics Objects (LinearVelocity based)
+    physAttachment      = nil,
+    linearVelocity      = nil,
+    angularVelocity     = nil,
+    alignOrientation    = nil,
+
     connections         = {},
     animTracks          = {},
 
@@ -133,6 +164,19 @@ local State = {
     ownershipSet        = false,
     collisionGroupSetup = false,
 
+    -- PID State
+    pid = {
+        integral        = Vector3.zero,
+        lastError       = Vector3.zero,
+        lastTime        = 0,
+    },
+
+    -- Adaptive Animation State
+    animSpeed = {
+        current         = 1.0,
+    },
+
+    -- ARB State
     arb = {
         positionHistory     = {},
         lastConfirmedCF     = nil,
@@ -141,7 +185,12 @@ local State = {
         lastResetAt         = 0,
         lastServerPushVel   = Vector3.zero,
         stopFrames          = 0,
-        active              = false,
+    },
+
+    -- Look-Ahead State
+    lookahead = {
+        lastTargetVel   = Vector3.zero,
+        lastTargetPos   = Vector3.zero,
     }
 }
 
@@ -157,10 +206,8 @@ local Deps = {
     sethiddenproperty          = nil,
     raknet                     = nil,
     sendNotif                  = nil,
-    getHumanoid                = nil,
     safeStand                  = nil,
     _AF                        = {},
-    _TL_refs                   = {},
     _AF_getReliableActionTrack = nil,
 }
 
@@ -187,8 +234,219 @@ local function clearTable(t)
     for k in pairs(t) do t[k] = nil end
 end
 
+local function clearVelocity(hrp)
+    if not hrp then return end
+    safe(function()
+        hrp.AssemblyLinearVelocity  = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+    end, "clearVelocity")
+end
+
 -- ════════════════════════════════════════════════════════════════════════════
---  ANTI-RUBBER-BAND SYSTEM
+--  SÄULE 1: LINEARVELOCITY PHYSICS STACK
+--  Ersetzt veraltetes BodyVelocity System
+-- ════════════════════════════════════════════════════════════════════════════
+
+local function buildPhysicsStack(hrp)
+    -- Cleanup existing
+    if State.physAttachment then
+        pcall(function() State.physAttachment:Destroy() end)
+    end
+
+    -- Root Attachment
+    local att = Instance.new("Attachment")
+    att.Name   = "BBKinematicRoot"
+    att.Parent = hrp
+    State.physAttachment = att
+
+    -- LinearVelocity: neutralisiert Gravity + externe Forces
+    local lv = Instance.new("LinearVelocity")
+    lv.Name              = "BBLinearVel"
+    lv.Attachment0       = att
+    lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
+    lv.MaxForce          = CFG.PID_MAX_FORCE
+    lv.RelativeTo        = Enum.ActuatorRelativeTo.World
+    lv.VectorVelocity    = Vector3.zero
+    lv.Parent            = hrp
+    State.linearVelocity = lv
+
+    -- AlignOrientation: hält Rotation stabil ohne Gyro-Drift
+    local ao = Instance.new("AlignOrientation")
+    ao.Name              = "BBAlignOri"
+    ao.Attachment0       = att
+    ao.MaxTorque         = CFG.PID_MAX_FORCE
+    ao.MaxAngularVelocity = 100
+    ao.Responsiveness    = 200
+    ao.RigidityEnabled   = true
+    ao.Parent            = hrp
+    State.alignOrientation = ao
+end
+
+local function destroyPhysicsStack()
+    for _, key in ipairs({ "physAttachment", "linearVelocity", "alignOrientation" }) do
+        if State[key] then
+            pcall(function() State[key]:Destroy() end)
+            State[key] = nil
+        end
+    end
+end
+
+-- ════════════════════════════════════════════════════════════════════════════
+--  SÄULE 2: PID-CONTROLLER
+--  Anti-Oscillation CFrame Korrektur
+-- ════════════════════════════════════════════════════════════════════════════
+
+local PID = {}
+
+function PID.reset()
+    State.pid.integral  = Vector3.zero
+    State.pid.lastError = Vector3.zero
+    State.pid.lastTime  = tick()
+end
+
+function PID.compute(current, desired, dt)
+    if dt <= 0 then return Vector3.zero end
+
+    local err = desired - current
+
+    -- Deadzone: keine Korrektur bei minimaler Abweichung
+    if err.Magnitude < CFG.PID_POSITION_DEADZONE then
+        State.pid.integral  = Vector3.zero
+        State.pid.lastError = Vector3.zero
+        return Vector3.zero
+    end
+
+    -- P: Proportional
+    local p = err * CFG.PID_KP
+
+    -- I: Integral (drift correction, clamped to prevent windup)
+    State.pid.integral = State.pid.integral + err * dt
+    local integralMag  = State.pid.integral.Magnitude
+    if integralMag > 10 then
+        State.pid.integral = State.pid.integral.Unit * 10
+    end
+    local i = State.pid.integral * CFG.PID_KI
+
+    -- D: Derivative (damping — prevents overshoot/oscillation)
+    local d = ((err - State.pid.lastError) / dt) * CFG.PID_KD
+    State.pid.lastError = err
+
+    local output = p + i + d
+
+    -- Clamp max output
+    if output.Magnitude > CFG.PID_MAX_FORCE then
+        output = output.Unit * CFG.PID_MAX_FORCE
+    end
+
+    return output
+end
+
+-- ════════════════════════════════════════════════════════════════════════════
+--  SÄULE 3: KINEMATIC TARGET PROJECTION (LOOK-AHEAD)
+--  Projiziert Target-Position in die Zukunft
+-- ════════════════════════════════════════════════════════════════════════════
+
+local function getLookAheadCF(baseCF, dt)
+    local tHRP = State.targetHRP
+    if not tHRP then return baseCF end
+
+    local vel   = tHRP.AssemblyLinearVelocity
+    local speed = vel.Magnitude
+
+    -- Keine Projektion bei Stillstand
+    if speed < CFG.ARB_STOP_VEL_THRESHOLD then
+        State.lookahead.lastTargetVel = Vector3.zero
+        return baseCF
+    end
+
+    -- Projektion: position + velocity * lookahead_time
+    local lookaheadTime   = dt * CFG.LOOKAHEAD_FRAMES
+    local projectedOffset = vel * lookaheadTime
+
+    -- Cap
+    if projectedOffset.Magnitude > CFG.LOOKAHEAD_MAX_OFFSET then
+        projectedOffset = projectedOffset.Unit * CFG.LOOKAHEAD_MAX_OFFSET
+    end
+
+    State.lookahead.lastTargetVel = vel
+
+    return baseCF + projectedOffset
+end
+
+-- ════════════════════════════════════════════════════════════════════════════
+--  SÄULE 4: COLLISION GROUP ISOLATION
+-- ════════════════════════════════════════════════════════════════════════════
+
+local function buildCollisionGroup()
+    if State.collisionGroupSetup or not Deps.PhysicsService then return end
+
+    safe(function()
+        local PS  = Deps.PhysicsService
+        local grp = CFG.COLLISION_GROUP_NAME
+
+        local exists = pcall(function() PS:GetCollisionGroupId(grp) end)
+        if not exists then
+            PS:CreateCollisionGroup(grp)
+            PS:CollisionGroupSetCollidable(grp, grp, false)
+            PS:CollisionGroupSetCollidable(grp, "Default", false)
+        end
+
+        local function assignGroup(char)
+            if not char then return end
+            for _, p in ipairs(char:GetDescendants()) do
+                if p:IsA("BasePart") then PS:SetPartCollisionGroup(p, grp) end
+            end
+        end
+
+        assignGroup(State.myChar)
+        State.collisionGroupSetup = true
+    end, "buildCollisionGroup")
+end
+
+local function destroyCollisionGroup()
+    if not State.collisionGroupSetup or not Deps.PhysicsService then return end
+
+    safe(function()
+        local PS = Deps.PhysicsService
+        if State.myChar then
+            for _, p in ipairs(State.myChar:GetDescendants()) do
+                if p:IsA("BasePart") then PS:SetPartCollisionGroup(p, "Default") end
+            end
+        end
+        State.collisionGroupSetup = false
+    end, "destroyCollisionGroup")
+end
+
+-- ════════════════════════════════════════════════════════════════════════════
+--  SÄULE 5: ADAPTIVE ANIMATION SPEED MATCHING
+-- ════════════════════════════════════════════════════════════════════════════
+
+local function updateAnimationSpeed(dt)
+    local tHRP = State.targetHRP
+    if not tHRP then return end
+
+    local speed    = tHRP.AssemblyLinearVelocity.Magnitude
+    local target   = CFG.ANIM_SPEED_IDLE + speed * CFG.ANIM_SPEED_VEL_SCALE
+    target         = math.clamp(target, CFG.ANIM_SPEED_IDLE, CFG.ANIM_SPEED_MAX)
+
+    -- Smooth transition
+    local alpha    = math.clamp(CFG.ANIM_SPEED_SMOOTH, 0, 1)
+    local current  = State.animSpeed.current
+    local newSpeed = current + (target - current) * alpha
+
+    if math.abs(newSpeed - current) < 0.01 then return end
+
+    State.animSpeed.current = newSpeed
+
+    for _, slot in pairs(State.animTracks) do
+        if slot.track and slot.track.IsPlaying then
+            safe(function() slot.track:AdjustSpeed(newSpeed) end, "updateAnimSpeed")
+        end
+    end
+end
+
+-- ════════════════════════════════════════════════════════════════════════════
+--  ARB SYSTEM (V2.2 carried forward)
 -- ════════════════════════════════════════════════════════════════════════════
 
 local ARB = {}
@@ -198,49 +456,6 @@ function ARB.recordPosition(cf)
     table.insert(h, 1, cf)
     if #h > CFG.ARB_HISTORY_SIZE then table.remove(h, #h) end
     State.arb.lastConfirmedCF = cf
-end
-
-local function adaptiveAlpha(myPos, desiredPos)
-    local dist = (myPos - desiredPos).Magnitude
-    local t    = math.clamp(
-        (dist - CFG.ARB_ALPHA_DIST_NEAR) / (CFG.ARB_ALPHA_DIST_FAR - CFG.ARB_ALPHA_DIST_NEAR),
-        0, 1
-    )
-    return CFG.ARB_ALPHA_MIN + t * (CFG.ARB_ALPHA_MAX - CFG.ARB_ALPHA_MIN)
-end
-
-local function predictedDesiredCF(desiredCF, dt)
-    local tHRP = State.targetHRP
-    if not tHRP then return desiredCF end
-
-    local vel   = tHRP.AssemblyLinearVelocity
-    local speed = vel.Magnitude
-
-    if speed < CFG.ARB_STOP_VEL_THRESHOLD then return desiredCF end
-
-    local offset = vel * dt * CFG.ARB_PREDICTION_FACTOR
-    if offset.Magnitude > CFG.ARB_PREDICTION_MAX then
-        offset = offset.Unit * CFG.ARB_PREDICTION_MAX
-    end
-
-    return desiredCF + offset
-end
-
-local function updateStopDetection()
-    local tHRP = State.targetHRP
-    if not tHRP then
-        State.arb.stopFrames = 0
-        return false
-    end
-
-    local vel = tHRP.AssemblyLinearVelocity
-    if vel.Magnitude < CFG.ARB_STOP_VEL_THRESHOLD then
-        State.arb.stopFrames = (State.arb.stopFrames or 0) + 1
-    else
-        State.arb.stopFrames = 0
-    end
-
-    return State.arb.stopFrames >= CFG.ARB_STOP_FRAMES
 end
 
 function ARB.detectRubberBand(myHRP, desiredCF)
@@ -283,10 +498,8 @@ function ARB.forceReset(myHRP)
     State.arb.lastResetAt = now
     State.arb.freezeCount = 0
     State.arb.frozenUntil = 0
-
     local cf = State.arb.lastConfirmedCF
         or (State.targetHRP and State.targetHRP.CFrame * CFrame.new(0, 2, 2))
-
     if cf and myHRP then
         safe(function()
             myHRP.CFrame                  = cf
@@ -294,56 +507,18 @@ function ARB.forceReset(myHRP)
             myHRP.AssemblyAngularVelocity = Vector3.zero
         end, "ARB.forceReset")
     end
-    warn("[BB-ARB] Force reset triggered")
+    warn("[BB-ARB] Force reset")
 end
 
-function ARB.update(myHRP, desiredCF, dt)
-    if not CFG.ARB_ENABLED or not myHRP or not desiredCF then return end
-
-    local now = tick()
-
-    if now < State.arb.frozenUntil then
-        safe(function()
-            myHRP.CFrame                  = desiredCF
-            myHRP.AssemblyLinearVelocity  = Vector3.zero
-        end, "ARB.update:frozen")
-        return
+local function updateStopDetection()
+    local tHRP = State.targetHRP
+    if not tHRP then State.arb.stopFrames = 0; return false end
+    if tHRP.AssemblyLinearVelocity.Magnitude < CFG.ARB_STOP_VEL_THRESHOLD then
+        State.arb.stopFrames = (State.arb.stopFrames or 0) + 1
+    else
+        State.arb.stopFrames = 0
     end
-
-    if ARB.detectVelocitySpike(myHRP) then
-        ARB.dampVelocity(myHRP)
-    end
-
-    if ARB.detectRubberBand(myHRP, desiredCF) then
-        if State.arb.freezeCount >= CFG.ARB_MAX_FREEZES then
-            ARB.forceReset(myHRP)
-        else
-            ARB.freeze(myHRP, desiredCF)
-        end
-        return
-    end
-
-    State.arb.freezeCount = 0
-
-    local targetStopped = updateStopDetection()
-    if targetStopped then
-        safe(function()
-            myHRP.CFrame                  = desiredCF
-            myHRP.AssemblyLinearVelocity  = Vector3.zero
-            myHRP.AssemblyAngularVelocity = Vector3.zero
-        end, "ARB.update:stopped")
-        ARB.recordPosition(myHRP.CFrame)
-        return
-    end
-
-    local finalCF = predictedDesiredCF(desiredCF, dt)
-    local alpha   = adaptiveAlpha(myHRP.CFrame.Position, finalCF.Position)
-
-    safe(function()
-        myHRP.CFrame = myHRP.CFrame:Lerp(finalCF, alpha)
-    end, "ARB.update:lerp")
-
-    ARB.recordPosition(myHRP.CFrame)
+    return State.arb.stopFrames >= CFG.ARB_STOP_FRAMES
 end
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -365,6 +540,7 @@ local function refreshMyCache()
         State.arb.freezeCount       = 0
         State.arb.stopFrames        = 0
         State.arb.lastServerPushVel = Vector3.zero
+        PID.reset()
     end
 end
 
@@ -380,87 +556,14 @@ local function refreshTargetCache()
         if State.myHRP and State.targetHRP then
             safe(function()
                 Deps.sethiddenproperty(State.myHRP, "PhysicsRepRootPart", State.targetHRP)
-            end, "refreshTargetCache:PhysicsRepRootPart")
+            end, "refreshTargetCache:PhysicsRep")
         end
     end
 end
 
 -- ════════════════════════════════════════════════════════════════════════════
---  PHYSICS HELPERS
+--  NETWORK OWNERSHIP
 -- ════════════════════════════════════════════════════════════════════════════
-
-local function createBodyVelocity(parent)
-    local bv = Instance.new("BodyVelocity")
-    bv.MaxForce = Vector3.new(0, 1e6, 0)
-    bv.Velocity = Vector3.zero
-    bv.Parent   = parent
-    State.bodyMovers[#State.bodyMovers + 1] = bv
-    return bv
-end
-
-local function destroyBodyMovers()
-    for _, obj in ipairs(State.bodyMovers) do
-        safe(function() obj:Destroy() end, "destroyBodyMovers")
-    end
-    clearTable(State.bodyMovers)
-end
-
-local function clearVelocity(hrp)
-    if not hrp then return end
-    safe(function()
-        hrp.AssemblyLinearVelocity  = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
-        hrp.Velocity                = Vector3.zero
-        hrp.RotVelocity             = Vector3.zero
-    end, "clearVelocity")
-end
-
-local function setupCollisionGroup()
-    if State.collisionGroupSetup or not Deps.PhysicsService then return end
-    safe(function()
-        local PS = Deps.PhysicsService
-        local ok = pcall(function() PS:GetCollisionGroupId("BBAttach") end)
-        if not ok then
-            PS:CreateCollisionGroup("BBAttach")
-            PS:CollisionGroupSetCollidable("BBAttach", "BBAttach", false)
-        end
-        if State.myChar then
-            for _, p in ipairs(State.myChar:GetDescendants()) do
-                if p:IsA("BasePart") then PS:SetPartCollisionGroup(p, "BBAttach") end
-            end
-        end
-        State.collisionGroupSetup = true
-    end, "setupCollisionGroup")
-end
-
-local function resetCollisionGroup()
-    if not State.collisionGroupSetup or not Deps.PhysicsService then return end
-    safe(function()
-        local PS = Deps.PhysicsService
-        if State.myChar then
-            for _, p in ipairs(State.myChar:GetDescendants()) do
-                if p:IsA("BasePart") then PS:SetPartCollisionGroup(p, "Default") end
-            end
-        end
-        State.collisionGroupSetup = false
-    end, "resetCollisionGroup")
-end
-
-local function disableCollision(char)
-    safe(function()
-        for _, p in ipairs(char:GetDescendants()) do
-            if p:IsA("BasePart") then p.CanCollide = false end
-        end
-    end, "disableCollision")
-end
-
-local function enableCollision(char)
-    safe(function()
-        for _, p in ipairs(char:GetDescendants()) do
-            if p:IsA("BasePart") then p.CanCollide = true end
-        end
-    end, "enableCollision")
-end
 
 local function ensureNetworkOwnership()
     if State.ownershipSet or not State.myHRP then return end
@@ -520,11 +623,15 @@ local function playAnimation(mode, opts)
     local animId = ANIM_IDS[mode]
     if not animId or not State.myHum then return end
 
+    local animRunning = false
+
     local function playFn(char)
-        if not char or not State.active then return end
+        if not char or not State.active or animRunning then return end
+        animRunning = true
+
         local hum = getHumanoid(char)
-        if not hum then return end
-        if opts.r6Only and hum.RigType ~= Enum.HumanoidRigType.R6 then return end
+        if not hum then animRunning = false; return end
+        if opts.r6Only and hum.RigType ~= Enum.HumanoidRigType.R6 then animRunning = false; return end
 
         local track
         if type(Deps._AF_getReliableActionTrack) == "function" then
@@ -532,15 +639,17 @@ local function playAnimation(mode, opts)
         else
             track = loadAnimation(hum, animId, mode .. "Anim")
         end
-        if not track then return end
+        if not track then animRunning = false; return end
 
         if opts.speed   then safe(function() track:AdjustSpeed(opts.speed) end, "playAnim:speed") end
         if opts.timePos then track:AdjustSpeed(0); track.TimePosition = opts.timePos end
 
         local slot = State.animTracks[mode] or {}
         if slot.conn then safe(function() slot.conn:Disconnect() end, "playAnim:oldConn") end
+
         slot.track = track
         slot.conn  = track.Stopped:Connect(function()
+            animRunning = false
             if State.active and State.mode == mode then
                 task.wait(CFG.ANIMATION_RETRY_DELAY)
                 playFn(char)
@@ -548,6 +657,7 @@ local function playAnimation(mode, opts)
         end)
         State.animTracks[mode] = slot
         track:Play()
+        animRunning = false
     end
 
     playFn(State.myChar)
@@ -609,6 +719,84 @@ local function calculateTargetCFrame(mode, modeData, dt)
 end
 
 -- ════════════════════════════════════════════════════════════════════════════
+--  POSITION APPLIER (Unified: Hard-Attach vs PID-Attach)
+-- ════════════════════════════════════════════════════════════════════════════
+
+local function applyPosition(myHRP, desiredCF, dt)
+    local isHardMode = CFG.HARD_ATTACH_MODES[State.mode]
+
+    -- ARB checks first (both modes)
+    local now = tick()
+
+    if now < State.arb.frozenUntil then
+        safe(function()
+            myHRP.CFrame                  = desiredCF
+            myHRP.AssemblyLinearVelocity  = Vector3.zero
+        end, "applyPosition:frozen")
+        return
+    end
+
+    if ARB.detectVelocitySpike(myHRP) then ARB.dampVelocity(myHRP) end
+
+    if ARB.detectRubberBand(myHRP, desiredCF) then
+        if State.arb.freezeCount >= CFG.ARB_MAX_FREEZES then
+            ARB.forceReset(myHRP)
+        else
+            ARB.freeze(myHRP, desiredCF)
+        end
+        return
+    end
+
+    State.arb.freezeCount = 0
+
+    -- Stop detection
+    local stopped = updateStopDetection()
+    if stopped then
+        safe(function()
+            myHRP.CFrame                  = desiredCF
+            myHRP.AssemblyLinearVelocity  = Vector3.zero
+            myHRP.AssemblyAngularVelocity = Vector3.zero
+        end, "applyPosition:stopped")
+        ARB.recordPosition(myHRP.CFrame)
+        return
+    end
+
+    -- Look-Ahead projection (not for hard modes)
+    local finalCF = isHardMode and desiredCF or getLookAheadCF(desiredCF, dt)
+
+    if isHardMode then
+        -- Hard-Attach: Direct CFrame lock (Carries, Piggyback etc.)
+        safe(function()
+            myHRP.CFrame                  = finalCF
+            myHRP.AssemblyLinearVelocity  = Vector3.zero
+            myHRP.AssemblyAngularVelocity = Vector3.zero
+        end, "applyPosition:hard")
+    else
+        -- PID-Attach: Physics-based correction (Hug, Kiss, etc.)
+        local pidForce = PID.compute(myHRP.CFrame.Position, finalCF.Position, dt)
+
+        if State.linearVelocity then
+            safe(function()
+                State.linearVelocity.VectorVelocity = pidForce / CFG.PID_MAX_FORCE * 60
+            end, "applyPosition:linearVel")
+        else
+            safe(function()
+                myHRP.CFrame = myHRP.CFrame:Lerp(finalCF, math.clamp(dt * CFG.PID_KP, 0, 1))
+            end, "applyPosition:pidFallback")
+        end
+
+        -- Orientation via AlignOrientation
+        if State.alignOrientation then
+            safe(function()
+                State.alignOrientation.CFrame = finalCF
+            end, "applyPosition:alignOri")
+        end
+    end
+
+    ARB.recordPosition(myHRP.CFrame)
+end
+
+-- ════════════════════════════════════════════════════════════════════════════
 --  HEALTH & SAFETY
 -- ════════════════════════════════════════════════════════════════════════════
 
@@ -630,10 +818,7 @@ end
 local function checkVoidRescue()
     local hrp = State.myHRP
     if not hrp then return end
-    if hrp.Position.Y > CFG.VOID_Y then
-        State.lastSafeY = hrp.Position.Y
-        return
-    end
+    if hrp.Position.Y > CFG.VOID_Y then State.lastSafeY = hrp.Position.Y; return end
     local tHRP     = State.targetHRP
     local rescueCF = tHRP and (tHRP.CFrame * CFrame.new(0, CFG.RESCUE_Y, 0))
         or CFrame.new(hrp.Position.X, math.max(State.lastSafeY, CFG.RESCUE_Y), hrp.Position.Z)
@@ -648,8 +833,8 @@ local function checkDetachDistance()
     local myHRP = State.myHRP
     local tHRP  = State.targetHRP
     if not myHRP or not tHRP then return end
-    local dist = (myHRP.Position - tHRP.Position).Magnitude
-    if dist > CFG.DETACH_DISTANCE and tick() - State.lastDetachFix > 0.65 then
+    if (myHRP.Position - tHRP.Position).Magnitude > CFG.DETACH_DISTANCE
+        and tick() - State.lastDetachFix > 0.65 then
         State.lastDetachFix = tick()
         safe(function()
             clearVelocity(myHRP)
@@ -679,9 +864,7 @@ end
 
 local function removeRaknetHook()
     if State.rakHooked and State.rakHookFn and Deps.raknet then
-        safe(function()
-            Deps.raknet.remove_send_hook(State.rakHookFn)
-        end, "removeRaknetHook")
+        safe(function() Deps.raknet.remove_send_hook(State.rakHookFn) end, "removeRaknetHook")
         State.rakHooked = false
         State.rakHookFn = nil
     end
@@ -696,11 +879,12 @@ local function bindRespawnHandlers()
         if not State.active then return end
         task.wait(CFG.RESPAWN_WAIT)
         refreshMyCache()
-        if Deps.PhysicsService then setupCollisionGroup() else disableCollision(char) end
+        buildCollisionGroup()
+        buildPhysicsStack(State.myHRP)
         setupHealthProtection()
         ensureNetworkOwnership()
-        local savedMode = State.mode
-        if savedMode and State.target then playAnimation(savedMode, {}) end
+        PID.reset()
+        if State.mode and State.target then playAnimation(State.mode, {}) end
     end)
     State.connections[#State.connections + 1] = myRespawn
 
@@ -717,20 +901,19 @@ local function bindRespawnHandlers()
     if targetChar then
         local targetHum = getHumanoid(targetChar)
         if targetHum then
-            local diedConn = targetHum.Died:Connect(function()
-                if State.active then
-                    task.wait(0.3)
-                    refreshTargetCache()
-                end
+            State.connections[#State.connections + 1] = targetHum.Died:Connect(function()
+                if State.active then task.wait(0.3); refreshTargetCache() end
             end)
-            State.connections[#State.connections + 1] = diedConn
         end
     end
 end
 
 -- ════════════════════════════════════════════════════════════════════════════
---  MAIN UPDATE LOOP
+--  MAIN HEARTBEAT
 -- ════════════════════════════════════════════════════════════════════════════
+
+local _physRepAcc = 0
+local PHYSREP_INTERVAL = 0.1 -- only update PhysicsRepRootPart every 100ms
 
 local function onHeartbeat(dt)
     if not State.active then return end
@@ -765,15 +948,13 @@ local function onHeartbeat(dt)
     local tHRP  = State.targetHRP
     if not myHRP or not tHRP or not tHRP.Parent then return end
 
-    if CFG.MATCH_TARGET_VELOCITY then
-        local vel = tHRP.AssemblyLinearVelocity
-        if vel.Magnitude > CFG.VELOCITY_THRESHOLD then
-            safe(function()
-                myHRP.AssemblyLinearVelocity = vel * CFG.VELOCITY_MATCH_FACTOR
-            end, "onHeartbeat:velocityMatch")
-        else
-            clearVelocity(myHRP)
-        end
+    -- PhysicsRepRootPart throttled (not every frame)
+    _physRepAcc = _physRepAcc + dt
+    if _physRepAcc >= PHYSREP_INTERVAL then
+        _physRepAcc = 0
+        safe(function()
+            Deps.sethiddenproperty(myHRP, "PhysicsRepRootPart", tHRP)
+        end, "onHeartbeat:PhysicsRep")
     end
 
     local modeData = ATTACH_MODES[State.mode]
@@ -782,11 +963,10 @@ local function onHeartbeat(dt)
     local desiredCF = calculateTargetCFrame(State.mode, modeData, dt)
     if not desiredCF then return end
 
-    ARB.update(myHRP, desiredCF, dt)
+    applyPosition(myHRP, desiredCF, dt)
 
-    safe(function()
-        Deps.sethiddenproperty(myHRP, "PhysicsRepRootPart", tHRP)
-    end, "onHeartbeat:PhysicsRepRootPart")
+    -- Adaptive Animation Speed (Säule 5)
+    updateAnimationSpeed(dt)
 end
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -819,6 +999,7 @@ function M.startBB(targetPlayer, modeKey)
         return
     end
 
+    -- Init ARB
     clearTable(State.arb.positionHistory)
     State.arb.lastConfirmedCF   = State.myHRP.CFrame
     State.arb.frozenUntil       = 0
@@ -827,10 +1008,16 @@ function M.startBB(targetPlayer, modeKey)
     State.arb.stopFrames        = 0
     State.arb.lastServerPushVel = Vector3.zero
 
+    -- Init PID
+    PID.reset()
+
+    -- Init Anim Speed
+    State.animSpeed.current = 1.0
+
+    -- Setup
     setupRaknetHook()
-
-    if Deps.PhysicsService then setupCollisionGroup() else disableCollision(State.myChar) end
-
+    buildCollisionGroup()
+    buildPhysicsStack(State.myHRP) -- V3: LinearVelocity stack
     setupHealthProtection()
     ensureNetworkOwnership()
 
@@ -838,8 +1025,6 @@ function M.startBB(targetPlayer, modeKey)
         State.myHum.PlatformStand = true
         State.myHum.WalkSpeed     = 0
     end, "startBB:humanoid")
-
-    createBodyVelocity(State.myHRP)
 
     local animOpts = {}
     if modeKey == "bb_kiss"      then animOpts.r6Only  = true end
@@ -868,6 +1053,30 @@ function M.startBB(targetPlayer, modeKey)
     if Deps._AF then Deps._AF.bbActive = true end
 end
 
+function M.switchMode(newMode)
+    if not State.active or not State.target then return end
+    if not ATTACH_MODES[newMode] then return end
+
+    State.mode = newMode
+    State.animSpeed.current = 1.0
+    PID.reset()
+
+    clearTable(State.arb.positionHistory)
+    State.arb.lastConfirmedCF = State.myHRP and State.myHRP.CFrame or nil
+
+    stopAllAnimations()
+    local animOpts = {}
+    if newMode == "bb_kiss"    then animOpts.r6Only = true end
+    if newMode == "bb_sucking" then animOpts.speed  = 2    end
+    if newMode == "bb_bangv2"  then
+        animOpts.speed = 2
+        Oscillator.reset(newMode .. "_osc")
+    end
+    playAnimation(newMode, animOpts)
+
+    if Deps.sendNotif then Deps.sendNotif("ByteBreaker", "→ " .. newMode, 1) end
+end
+
 function M.stopBB()
     if not State.active then return end
     State.active = false
@@ -878,7 +1087,8 @@ function M.stopBB()
     clearTable(State.connections)
 
     stopAllAnimations()
-    destroyBodyMovers()
+    destroyPhysicsStack()
+    destroyCollisionGroup()
     removeRaknetHook()
 
     local myChar = State.myChar
@@ -903,9 +1113,6 @@ function M.stopBB()
         end, "stopBB:Humanoid")
     end
 
-    if Deps.PhysicsService then resetCollisionGroup()
-    elseif myChar then enableCollision(myChar) end
-
     State.mode           = nil
     State.target         = nil
     State.oscTime        = 0
@@ -914,6 +1121,7 @@ function M.stopBB()
     State.lastSafeY      = 0
     State.lastDetachFix  = 0
     State.ownershipSet   = false
+    _physRepAcc          = 0
 
     clearTable(State.arb.positionHistory)
     State.arb.lastConfirmedCF   = nil
@@ -921,6 +1129,8 @@ function M.stopBB()
     State.arb.freezeCount       = 0
     State.arb.stopFrames        = 0
     State.arb.lastServerPushVel = Vector3.zero
+
+    PID.reset()
 
     if Deps._AF then Deps._AF.bbActive = false end
 
@@ -932,17 +1142,17 @@ function M.stopBB()
 end
 
 function M.initBB(cfg)
+    assert(cfg, "[BB] initBB: cfg required")
     Deps.LocalPlayer                = cfg.LocalPlayer or game:GetService("Players").LocalPlayer
     Deps.RunService                 = cfg.RunService or game:GetService("RunService")
     Deps.Players                    = cfg.Players or game:GetService("Players")
     Deps.PhysicsService             = cfg.PhysicsService or game:GetService("PhysicsService")
     Deps.sethiddenproperty          = cfg.sethiddenproperty or sethiddenproperty
+    assert(type(Deps.sethiddenproperty) == "function", "[BB] initBB: sethiddenproperty required")
     Deps.raknet                     = cfg.raknet
     Deps.sendNotif                  = cfg.sendNotif
-    Deps.getHumanoid                = cfg.getHumanoid
     Deps.safeStand                  = cfg.safeStand
     Deps._AF                        = cfg._AF or {}
-    Deps._TL_refs                   = cfg._TL_refs or {}
     Deps._AF_getReliableActionTrack = cfg._AF_getReliableActionTrack
 end
 
@@ -950,14 +1160,13 @@ function M.isActive() return State.active end
 
 function M.getState()
     return {
-        active    = State.active,
-        mode      = State.mode,
-        target    = State.target and State.target.Name,
-        lastError = State.lastError,
+        active      = State.active,
+        mode        = State.mode,
+        target      = State.target and State.target.Name,
+        lastError   = State.lastError,
+        animSpeed   = State.animSpeed.current,
         arb = {
             freezeCount = State.arb.freezeCount,
-            frozenUntil = State.arb.frozenUntil,
-            lastResetAt = State.arb.lastResetAt,
             stopFrames  = State.arb.stopFrames,
         }
     }
