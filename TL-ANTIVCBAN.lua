@@ -279,7 +279,7 @@ local function _vc_buildTopBarMic()
     local btn = Instance.new("ImageButton")
     btn.Name = "MicButton"
     btn.AnchorPoint = Vector2.new(0.5, 0.5)
-    btn.Position = UDim2.new(0, 165 + 23, 0, 13 + 21)
+    btn.Position = UDim2.new(0, 188, 0, 34)
     btn.Size = UDim2.new(0, 43, 0, 43)
     btn.BackgroundTransparency = 1
     btn.BorderSizePixel = 0
@@ -551,7 +551,5 @@ end
 if GLOBAL_ENV then
     GLOBAL_ENV.__TL_AntiVCBAN = API
 end
-
-task.spawn(function() API.start() end)
 
 return API
