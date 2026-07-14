@@ -1,3 +1,7 @@
+
+
+
+
 local GLOBAL_ENV = (typeof(getgenv) == "function" and getgenv()) or _G
 local RUNTIME_KEY = "__TL_AntiVCBAN_Runtime"
 
@@ -28,9 +32,9 @@ local VoiceInternal = (pcall(function() return game:GetService("VoiceChatInterna
     game:GetService("VoiceChatInternal")) or nil
 
 local lp = Players.LocalPlayer
-local _getconnections = rawget(_G, "getconnections")
-local _get_signal_cons = rawget(_G, "get_signal_cons")
-local get_conns = _getconnections or _get_signal_cons or nil
+local get_conns = (typeof(getconnections) == "function" and getconnections)
+    or (typeof(get_signal_cons) == "function" and get_signal_cons)
+    or nil
 
 
 local _vc_active = false
@@ -53,7 +57,7 @@ local MUTED_ASSET = "rbxasset://textures/ui/VoiceChat/MicLight/Muted.png"
 
 local _sendNotif = nil
 local function notify(title, text, duration)
-    if _sendNotif then _sendNotif(title, text, duration); return end
+    if _sendNotif then _sendNotif(title, text, duration) return end
     pcall(function()
         game:GetService("StarterGui"):SetCore("SendNotification", {
             Title = title, Text = text, Duration = duration or 3
@@ -62,7 +66,30 @@ local function notify(title, text, duration)
 end
 
 
-
+local function safeIsFile(path)
+    if type(isfile) ~= "function" then return false end
+    local ok, result = pcall(isfile, path)
+    return ok and result == true
+end
+local function safeMakeFolder(path)
+    if type(makefolder) ~= "function" then return false end
+    return pcall(makefolder, path)
+end
+local function safeWriteFile(path, bytes)
+    if type(writefile) ~= "function" then return false end
+    return pcall(writefile, path, bytes)
+end
+local function safeGetCustomAsset(path)
+    if type(getcustomasset) == "function" then
+        local ok, asset = pcall(getcustomasset, path)
+        if ok and asset and asset ~= "" then return asset end
+    end
+    if type(getsynasset) == "function" then
+        local ok, asset = pcall(getsynasset, path)
+        if ok and asset and asset ~= "" then return asset end
+    end
+    return nil
+end
 
 
 local _vcCachedTargets, _vcLastFetch = nil, 0
@@ -279,7 +306,7 @@ local function _vc_buildTopBarMic()
     local btn = Instance.new("ImageButton")
     btn.Name = "MicButton"
     btn.AnchorPoint = Vector2.new(0.5, 0.5)
-    btn.Position = UDim2.new(0, 188, 0, 34)
+    btn.Position = UDim2.new(0, 165 + 23, 0, 13 + 21)
     btn.Size = UDim2.new(0, 43, 0, 43)
     btn.BackgroundTransparency = 1
     btn.BorderSizePixel = 0
@@ -367,45 +394,31 @@ end
 
 
 local function _vc_downloadIcons()
-    local folderName = "assets/TL-DEFAULT"
-    pcall(function()
-        if not isfolder("assets") then makefolder("assets") end
-        if not isfolder(folderName) then makefolder(folderName) end
-    end)
-
-    local function loadIcon(fileName, imageUrl, fallback)
-        local fullPath = folderName .. "/" .. fileName
-        pcall(function()
-            if not isfile(fullPath) then
-                writefile(fullPath, game:HttpGet(imageUrl))
-            end
+    if not isfolder("assets") then safeMakeFolder("assets") end
+    local urls = {
+        { "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/TL-DEFAULT/ANTIVCBAN-Unmuted-Icon.png", "assets/TL-DEFAULT/TL_Unmuted.png", "unmuted" },
+        { "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/TL-DEFAULT/ANTIVCBAN-Mute-Icon.png", "assets/TL-DEFAULT/TL_Muted.png", "muted" },
+    }
+    for _, entry in pairs(urls) do
+        task.spawn(function()
+            pcall(function()
+                if not safeIsFile(entry[2]) then
+                    local data = (game :: any):HttpGet(entry[1])
+                    if data then safeWriteFile(entry[2], data) end
+                end
+                local asset = safeGetCustomAsset(entry[2])
+                if asset then
+                    if entry[3] == "unmuted" then
+                        UNMUTED_ASSET = asset
+                        if _vc_unmutedIcon then _vc_unmutedIcon.Image = asset end
+                    else
+                        MUTED_ASSET = asset
+                        if _vc_mutedIcon then _vc_mutedIcon.Image = asset end
+                    end
+                end
+            end)
         end)
-        local getAsset = getcustomasset or getsynasset
-        local _getcustomassetid = rawget(_G, "getcustomassetid")
-        if not getAsset and _getcustomassetid then getAsset = _getcustomassetid end
-        if getAsset then
-            local ok, asset = pcall(getAsset, fullPath)
-            if ok and asset and asset ~= "" then return asset end
-        end
-        return fallback
     end
-
-    local unmuted = loadIcon(
-        "TL_Unmuted.png",
-        "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/TL-DEFAULT/ANTIVCBAN-Unmuted-Icon.png",
-        "rbxasset://textures/ui/VoiceChat/MicLight/Unmuted0.png"
-    )
-    local muted = loadIcon(
-        "TL_Muted.png",
-        "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/TL-DEFAULT/ANTIVCBAN-Mute-Icon.png",
-        "rbxasset://textures/ui/VoiceChat/MicLight/Muted.png"
-    )
-
-    UNMUTED_ASSET = unmuted
-    MUTED_ASSET = muted
-
-    if _vc_unmutedIcon then _vc_unmutedIcon.Image = unmuted end
-    if _vc_mutedIcon then _vc_mutedIcon.Image = muted end
 end
 
 
@@ -465,6 +478,7 @@ local function _vc_executeAntiVCBan()
     _vc_buildTopBarMic()
     _vc_downloadIcons()
 
+    task.wait(0.5)
     local adi = _vc_getADI()
     if adi and _vc_unmutedIcon and _vc_mutedIcon then
         _vc_applyIconState(adi.Muted == true)
@@ -552,5 +566,7 @@ end
 if GLOBAL_ENV then
     GLOBAL_ENV.__TL_AntiVCBAN = API
 end
+
+task.spawn(function() API.start() end)
 
 return API
