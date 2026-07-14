@@ -1,7 +1,12 @@
+-- TL-QABar.lua
+-- Extracted QABar UI module from TL-ByteBreaker
+
+local M = {}
+
 local RUNTIME_KEY = "__TL_QABarRuntime"
-local _qb            = {}   
-local _initialized   = false
-local _started       = false
+local _qb            = {}
+local _qaInitialized   = false
+local _qaStarted       = false
 
 local P = setmetatable({}, {
     __index = function(_, k)
@@ -11,7 +16,7 @@ local P = setmetatable({}, {
             _P_STOP_BRD = Color3.fromRGB(180, 45, 45),
             _P_STOP_TXT = Color3.fromRGB(224, 72, 72),
         }
-        
+
         local literals = {
             stopBg  = stops._P_STOP_BG,
             stopBrd = stops._P_STOP_BRD,
@@ -48,16 +53,15 @@ local P = setmetatable({}, {
 })
 local API = {}
 
-function API.init(deps)
+function M.initQABar(deps)
     do
         local _genvC = deps._genv or (getgenv and getgenv()) or {}
         _qb.C = deps.C or _genvC.C or _G.C or _qb.C
     end
 
-    if _initialized then return end
-    _initialized = true
+    if _qaInitialized then return end
+    _qaInitialized = true
 
-    
     local _TL_refs = deps._TL_refs or {}
     local _genv    = deps._genv or (getgenv and getgenv()) or {}
 
@@ -80,8 +84,8 @@ function API.init(deps)
     _qb.AF              = _TL_refs._TL_AF or _genv._TL_AF
     _qb.SOH             = _TL_refs._TL_SOH or _genv._TL_SOH
     _qb.act_stopFollow  = _TL_refs._TL_act_stopFollow or _genv._TL_act_stopFollow
-    _qb.stopBB          = _TL_refs._TL_stopBB or _genv._TL_stopBB
-    _qb.startBB         = _TL_refs._TL_startBB or _genv._TL_startBB
+    _qb.stopBB          = deps.stopBB  or function() end
+    _qb.startBB         = deps.startBB or function() end
     _qb.qaDispatch      = _TL_refs._TL_qaDispatch
     _qb.stopGhost       = _TL_refs._TL_stopGhost or _genv._TL_stopGhost
     _qb.stopSitOnHead   = _TL_refs._TL_stopSitOnHead or _genv._TL_stopSitOnHead
@@ -138,7 +142,7 @@ function API.init(deps)
     _qb._handleError     = deps._handleError or function(msg) warn("[QABar] " .. tostring(msg)) end
     _qb.stopStand        = deps.stopStand or function() end
     _qb.standStopAnim    = deps.standStopAnim or function() end
-    _qb.closeBar         = deps.closeBar or function() end  
+    _qb.closeBar         = deps.closeBar or function() end
     _qb.LocalPlayer      = deps.LocalPlayer or (game and game:GetService("Players").LocalPlayer)
     _qb.RunService       = deps.RunService or (game and game:GetService("RunService"))
     _qb._SvcUIS          = deps._SvcUIS or (game and game:GetService("UserInputService"))
@@ -151,63 +155,57 @@ function API.init(deps)
     _qb.tlArrowBig = _qb.tlArrowBig or _qb.g._TL_tlArrowBig
 end
 
-local QA_CATS = {
-{
-
-label = "Freaky",
-        col = Color3.fromRGB(255, 80, 160),
-        actions = {
-            { key = "licking",     label = "Licking",      imageId = "rbxassetid://72579312094126" },
-            { key = "kiss",        label = "Kiss",         imageId = "rbxassetid://86857269527024" },
-            { key = "sucking",     label = "Sucking 2",    imageId = "rbxassetid://72579312094126" },
-            { key = "suck_it",     label = "Suck It",      imageId = "rbxassetid://72579312094126" },
-            { key = "layfuck",     label = "Lay Fuck",     imageId = "rbxassetid://72579312094126" },
-            { key = "backshots",   label = "Backshots",    imageId = "rbxassetid://112450246602990" },
-            { key = "doggy",       label = "Doggy",        imageId = "rbxassetid://72579312094126" },
-            { key = "pussyspread", label = "Pussy Spread", imageId = "rbxassetid://72579312094126" },
-        }
-    },
-    {
-        label = "1X Action",
-        col = Color3.fromRGB(180, 80, 255),
-        actions = {
-            { key = "headbutt",     label = "Headbutt",     imageId = "rbxassetid://81011129131522" },
-            { key = "1x_kiss",      label = "Kiss",         imageId = "rbxassetid://110391423694838" },
-            { key = "1x_slap",      label = "Slap",         imageId = "rbxassetid://110482161478246" },
-            { key = "1x_hug",       label = "Hug",          imageId = "rbxassetid://78323512869606" },
-            { key = "jumpscare_vr", label = "Jumpscare VR", imageId = "rbxassetid://102559848050770" },
-        }
-    },
-    {
-        label = "Annoying",
-        col = Color3.fromRGB(55, 195, 255),
-        actions = {
-            { key = "orbit",      label = "Orbit TP",    imageId = "rbxassetid://139840976938907" },
-            { key = "spinning",   label = "Spinning",    imageId = "rbxassetid://113740413795794" },
-            { key = "upsidedown", label = "Upside Down", imageId = "rbxassetid://89009236995193" },
-            { key = "crossud",    label = "Cross UD",    imageId = "rbxassetid://77458828386203" },
-            { key = "ghost",      label = "Ghost",       imageId = "rbxassetid://77104113506431" },
-        }
-    },
-    {
-        label = "Roleplay",
-        col = Color3.fromRGB(255, 175, 55),
-        actions = {
-            { key = "soh",           label = "On Head",           imageId = "rbxassetid://86857269527024" },
-            { key = "piggyback",     label = "Piggyback",         imageId = "rbxassetid://119518980113353" },
-            { key = "piggyback2",    label = "Piggyback2",        imageId = "rbxassetid://119518980113353" },
-            { key = "backpack",      label = "Backpack",          imageId = "rbxassetid://135716031985311" },
-            { key = "friend",        label = "Friend",            imageId = "rbxassetid://79735988088948" },
-            { key = "hug",           label = "Hug",               imageId = "rbxassetid://86857269527024" },
-            { key = "hug2",          label = "Hug 2",             imageId = "rbxassetid://86857269527024" },
-            { key = "carry",         label = "Carry",             imageId = "rbxassetid://86857269527024" },
-            { key = "carryshoulder", label = "Carry on shoulder", imageId = "rbxassetid://86857269527024" },
-            { key = "shouldersit",   label = "Shouldersit",       imageId = "rbxassetid://86857269527024" },
-            { key = "stand",         label = "Stand",             imageId = "rbxassetid://86857269527024" },
-            { key = "headstand",     label = "Head Stand",        imageId = "rbxassetid://86857269527024" },
-        }
-    },
-}
+local QA_CATS = {{
+    label = "Freaky",
+    col = Color3.fromRGB(255, 80, 160),
+    actions = {
+        { key = "licking",     label = "Licking",      imageId = "rbxassetid://72579312094126" },
+        { key = "kiss",        label = "Kiss",         imageId = "rbxassetid://86857269527024" },
+        { key = "sucking",     label = "Sucking 2",    imageId = "rbxassetid://72579312094126" },
+        { key = "suck_it",     label = "Suck It",      imageId = "rbxassetid://72579312094126" },
+        { key = "layfuck",     label = "Lay Fuck",     imageId = "rbxassetid://72579312094126" },
+        { key = "backshots",   label = "Backshots",    imageId = "rbxassetid://112450246602990" },
+        { key = "doggy",       label = "Doggy",        imageId = "rbxassetid://72579312094126" },
+        { key = "pussyspread", label = "Pussy Spread", imageId = "rbxassetid://72579312094126" },
+    }
+}, {
+    label = "1X Action",
+    col = Color3.fromRGB(180, 80, 255),
+    actions = {
+        { key = "headbutt",     label = "Headbutt",     imageId = "rbxassetid://81011129131522" },
+        { key = "1x_kiss",      label = "Kiss",         imageId = "rbxassetid://110391423694838" },
+        { key = "1x_slap",      label = "Slap",         imageId = "rbxassetid://110482161478246" },
+        { key = "1x_hug",       label = "Hug",          imageId = "rbxassetid://78323512869606" },
+        { key = "jumpscare_vr", label = "Jumpscare VR", imageId = "rbxassetid://102559848050770" },
+    }
+}, {
+    label = "Annoying",
+    col = Color3.fromRGB(55, 195, 255),
+    actions = {
+        { key = "orbit",      label = "Orbit TP",    imageId = "rbxassetid://139840976938907" },
+        { key = "spinning",   label = "Spinning",    imageId = "rbxassetid://113740413795794" },
+        { key = "upsidedown", label = "Upside Down", imageId = "rbxassetid://89009236995193" },
+        { key = "crossud",    label = "Cross UD",    imageId = "rbxassetid://77458828386203" },
+        { key = "ghost",      label = "Ghost",       imageId = "rbxassetid://77104113506431" },
+    }
+}, {
+    label = "Roleplay",
+    col = Color3.fromRGB(255, 175, 55),
+    actions = {
+        { key = "soh",           label = "On Head",           imageId = "rbxassetid://86857269527024" },
+        { key = "piggyback",     label = "Piggyback",         imageId = "rbxassetid://119518980113353" },
+        { key = "piggyback2",    label = "Piggyback2",        imageId = "rbxassetid://119518980113353" },
+        { key = "backpack",      label = "Backpack",          imageId = "rbxassetid://135716031985311" },
+        { key = "friend",        label = "Friend",            imageId = "rbxassetid://79735988088948" },
+        { key = "hug",           label = "Hug",               imageId = "rbxassetid://86857269527024" },
+        { key = "hug2",          label = "Hug 2",             imageId = "rbxassetid://86857269527024" },
+        { key = "carry",         label = "Carry",             imageId = "rbxassetid://86857269527024" },
+        { key = "carryshoulder", label = "Carry on shoulder", imageId = "rbxassetid://86857269527024" },
+        { key = "shouldersit",   label = "Shouldersit",       imageId = "rbxassetid://86857269527024" },
+        { key = "stand",         label = "Stand",             imageId = "rbxassetid://86857269527024" },
+        { key = "headstand",     label = "Head Stand",        imageId = "rbxassetid://86857269527024" },
+    }
+}}
 
 local QA_ACTIONS = {}
 for _, cat in ipairs(QA_CATS) do
@@ -284,8 +282,8 @@ _q.statusDot = nil
 _q.statusTxt = nil
 
 
-local _connections = {}   
-local _tasks        = {}   
+local _connections = {}
+local _tasks        = {}
 
 local function _conn(c)
     if c then _connections[#_connections + 1] = c end
@@ -389,7 +387,7 @@ _qb.qaStartNoSit = function()
                 if _qb.qaDiedConn then pcall(function() _qb.qaDiedConn:Disconnect() end) end
                 _qb.qaDiedConn = _nsHum.Died:Connect(function()
                     if _qb.qaActiveKey and _qb.qaActiveTarget then
-                        _qb.stopQAAction(true) 
+                        _qb.stopQAAction(true)
                     end
                 end)
             end
@@ -680,13 +678,13 @@ _qb.resetAllCards = function()
     end
 end
 
-function API.start()
-    if _started then return end
-    if not _initialized then
-        warn("[QABar] Must call init(deps) before start()")
+function M.startQABar()
+    if _qaStarted then return end
+    if not _qaInitialized then
+        warn("[QABar] Must call initQABar(deps) before startQABar()")
         return
     end
-    _started = true
+    _qaStarted = true
 
     local LocalPlayer = _qb.LocalPlayer
     local RunService  = _qb.RunService
@@ -708,7 +706,6 @@ function API.start()
 
     task.spawn(function()
         local _ok_QABar, _err_QABar = xpcall(function()
-            
             local _vp    = workspace.CurrentCamera.ViewportSize
             local _touch = pcall(function() return _SvcUIS.TouchEnabled end) and _SvcUIS.TouchEnabled
             local _kbd   = pcall(function() return _SvcUIS.KeyboardEnabled end) and _SvcUIS.KeyboardEnabled
@@ -716,7 +713,6 @@ function API.start()
             local _isMob = _touch and not _kbd and _short < 500
             local _isTab = _touch and not _kbd and _short >= 500
 
-            
             local _QA_RIGHT_OFFSET = -5
             local _VL_ICON_H = _TL_refs._TL_VL_ICON_H or 58
             local _QA_TOP_Y = 5 + _VL_ICON_H + 4
@@ -729,11 +725,11 @@ function API.start()
             qaBar.AnchorPoint = Vector2.new(1, 0)
             qaBar.ClipsDescendants = true
             qaBar.Visible = false; qaBar.ZIndex = 9
-            
+
             pcall(function() if getgenv then _qb.env._TL_qaBar = qaBar end end)
             pcall(function() _TL_refs._TL_qaBar = qaBar end)
             _qb._qaBarStroke = mkStroke(_qb.qaBar, 1, P.panelBrd, 0.7)
-            
+
             if _isMob or _isTab then
                 local _qaScale    = Instance.new("UIScale", qaBar)
                 _qaScale.Scale    = _TL_VP.mobScl
@@ -776,7 +772,6 @@ function API.start()
             local tgtNameLbl = _qb.tgtNameLbl
             tgtNameLbl.ZIndex = 12
 
-            
             task.spawn(function()
                 local _tdTw = nil
                 while qaBar and qaBar.Parent and _qb._tlAlive() do
@@ -820,7 +815,6 @@ function API.start()
             _qb._footStroke    = nil
             _qb._stopBtnStroke = nil
 
-            
             _qb._panelColorHooks[#_qb._panelColorHooks + 1] = function(_newT)
                 pcall(function() _qb.qaScroll.ScrollBarImageColor3 = P.panelBrd end)
                 pcall(function() if _qb._qaBarStroke then _qb._qaBarStroke.Color = P.panelBrd end end)
@@ -839,7 +833,6 @@ function API.start()
                 end
             end
 
-            
             local curY = 0
             local _qaLastGlobalClick = 0
             local _qaCardLastClick = {}
@@ -989,7 +982,6 @@ function API.start()
                 curY = rowStartY + rows * (QA_CH + QA_GAP) + 6
             end
 
-            
             task.spawn(function()
                 while _qb.qaBar and _qb.qaBar.Parent and _qb._tlAlive() do
                     pcall(function()
@@ -1018,7 +1010,6 @@ function API.start()
                 end
             end)
 
-            
             local TOTAL_H  = curY
             local SCROLL_H = math.min(TOTAL_H, SCROLL_MAX)
             qaScroll.Size       = UDim2.new(0, INNER_W, 0, SCROLL_H)
@@ -1031,7 +1022,6 @@ function API.start()
             _q.statusDot = mkF(foot, UDim2.new(0, 5, 0, 5), UDim2.new(0, 9, 0.5, -2), P.tgtTxt, 0, 99)
             _q.statusDot.ZIndex = 12
 
-            
             task.spawn(function()
                 local _sdTw = nil
                 while foot and foot.Parent and _qb._tlAlive() do
@@ -1053,7 +1043,6 @@ function API.start()
                 "Idle – Select an action", Enum.Font.GothamBold, 11, P.tgtTxt)
             _q.statusTxt.ZIndex = 12
 
-            
             local stopBtn = Instance.new("TextButton", foot)
             stopBtn.Size = UDim2.new(0, 38, 0, 20); stopBtn.Position = UDim2.new(1, -42, 0.5, -10)
             stopBtn.BackgroundColor3 = P.stopBg; stopBtn.BackgroundTransparency = 0.1
@@ -1083,7 +1072,6 @@ function API.start()
                 if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then _qb.qaDoStop() end
             end)
 
-            
             _qb.qaBarTween = nil
             _qb.openQABar = function()
                 if _qb.qaBarTween then
@@ -1119,7 +1107,6 @@ function API.start()
             end
             _TL_refs._TL_closeQABar = _qb.closeQABar
 
-            
             _qb._tlHitboxLastClick = 0
             _qb.tlHitboxActivate = function()
                 local now = tick()
@@ -1145,7 +1132,6 @@ function API.start()
             if _qb.tlArrow then _qb.tlArrow.Image = "rbxassetid://119926812103560" end
             if _qb.tlArrowBig then _qb.tlArrowBig.Image = "rbxassetid://119926812103560" end
 
-            
             _qb._FULL_H = FULL_H
         end, function(e) return debug.traceback(tostring(e), 2) end); if not _ok_QABar then
             warn("[TL] QABar:error " .. tostring(_err_QABar))
@@ -1154,9 +1140,9 @@ function API.start()
     end)
 end
 
-function API.stop()
-    if not _started then return end
-    _started = false
+function M.stopQABar()
+    if not _qaStarted then return end
+    _qaStarted = false
 
     pcall(function() _qb.stopQAAction() end)
     if _qb.qaBar then
@@ -1169,39 +1155,35 @@ function API.stop()
     end
 end
 
-function API.isActive()
+function M.isQABarActive()
     return _qb.qaBarOpen == true
 end
 
-function API.cleanup()
-    API.stop()
+function M.cleanupQABar()
+    M.stopQABar()
 
-    
     for _, c in ipairs(_connections) do
         pcall(function() c:Disconnect() end)
     end
     _connections = {}
 
-    
     if _qb.qaBar then
         pcall(function() _qb.qaBar:Destroy() end)
         _qb.qaBar = nil
     end
 
-    
     _qb.qaCardRefs = {}
     pcall(function() _qb.g._TL_qb = nil end)
     pcall(function() _qb.g._TL_closeQABar = nil end)
     pcall(function() _qb.g._TL_qaBar = nil end)
     pcall(function() _qb.env._TL_qaBar = nil end)
 
-    
     pcall(function() _G.TLQA_ResetUI = nil end)
     pcall(function() _G._TL_setQABar = nil end)
     pcall(function() _G._TL_qaBarActive = nil end)
 
-    _initialized = false
-    _started = false
+    _qaInitialized = false
+    _qaStarted = false
 end
 
 
@@ -1212,11 +1194,9 @@ _G._TL_setQABar = function(frame)
     return _qb.qaBar
 end
 
-
 _G._TL_qaBarActive = function()
     return _qb.qaBarOpen == true
 end
-
 
 _G.TLQA_ResetUI = function()
     pcall(function()
@@ -1225,20 +1205,16 @@ _G.TLQA_ResetUI = function()
     end)
 end
 
-
-if _initialized and _qb._registerResetFn then
+if _qaInitialized and _qb._registerResetFn then
     _qb._registerResetFn(_G.TLQA_ResetUI)
 end
 
+M.openQABar      = function() if _qb.openQABar then _qb.openQABar() end end
+M.closeQABar     = function() if _qb.closeQABar then _qb.closeQABar() end end
+M.stopQAAction   = function(kr) if _qb.stopQAAction then _qb.stopQAAction(kr) end end
+M.activateQAAction = function(key, tgt) if _qb.activateQAAction then return _qb.activateQAAction(key, tgt) end return false end
+M.resetAllCards  = function() if _qb.resetAllCards then _qb.resetAllCards() end end
+M.qaStartNoSit   = function() if _qb.qaStartNoSit then _qb.qaStartNoSit() end end
+M.qaStopNoSit    = function(kr) if _qb.qaStopNoSit then _qb.qaStopNoSit(kr) end end
 
-
-
-API.openQABar      = function() if _qb.openQABar then _qb.openQABar() end end
-API.closeQABar     = function() if _qb.closeQABar then _qb.closeQABar() end end
-API.stopQAAction   = function(kr) if _qb.stopQAAction then _qb.stopQAAction(kr) end end
-API.activateQAAction = function(key, tgt) if _qb.activateQAAction then return _qb.activateQAAction(key, tgt) end return false end
-API.resetAllCards  = function() if _qb.resetAllCards then _qb.resetAllCards() end end
-API.qaStartNoSit   = function() if _qb.qaStartNoSit then _qb.qaStartNoSit() end end
-API.qaStopNoSit    = function(kr) if _qb.qaStopNoSit then _qb.qaStopNoSit(kr) end end
-
-return API
+return M
