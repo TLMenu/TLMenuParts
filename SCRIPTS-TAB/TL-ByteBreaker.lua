@@ -95,6 +95,7 @@ local ANIM_IDS = {
     bb_attach        = "101003999980390",
     bb_piggyback     = "108744973494490",
     bb_piggyback2    = "92706401579816",
+    bb_stand         = "133594786690861",
 }
 
 local ATTACH_MODES = {
