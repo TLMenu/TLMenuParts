@@ -123,7 +123,7 @@ local ATTACH_MODES = {
     bb_kiss          = { x = 0,    y = 1.5,   z = -1.2,  rotY = 180, osc = 0.08, oscSpeed = 10 },
     bb_sucking       = { x = 0,    y = -0.4,  z = -3.1,  rotY = 180, osc = 0.5,  oscSpeed = 20 },
     bb_suck_it       = { x = 0,    y = -1.2,  z = -2.0,  rotY = 180, osc = 1.0,  oscSpeed = 12 },
-    bb_backshots     = { x = 0,    y = -2.7,  z = -2.0,  rotX = 20,  osc = 1.5,  oscSpeed = 10 },
+    bb_backshots     = { x = 0,    y = -1.7,  z = -2.0,  rotX = 20,  osc = 1.5,  oscSpeed = 10 },
     bb_doggy         = { x = 0,    y = -4.7,  z = -0.8,  rotX = -90 },
     bb_pussyspread   = { x = 0,    y = -2.45, z = -2.0,  osc = 1.5,  oscSpeed = 10 },
     bb_soh           = { y = 1,    headRelative = true },
