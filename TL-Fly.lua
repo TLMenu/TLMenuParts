@@ -1,7 +1,3 @@
-
-
-
-
 local GLOBAL_ENV = (typeof(getgenv) == "function" and getgenv()) or _G
 local RUNTIME_KEY = "__TL_FlyRuntime"
 
@@ -166,6 +162,8 @@ local hasBoosted   = false
 local speedIndex   = 1
 local ctrl         = { f = 0, b = 0, l = 0, r = 0, u = 0, d = 0 }
 local bg, bv, updateFlyPanel = nil, nil, nil
+local fakeFloor    = nil
+local fakeFloorConn = nil
 
 
 C = getC()  
@@ -471,6 +469,26 @@ local function startFly()
     local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
     if not myHRP or not myHum then flying = false; return end
     myHum.PlatformStand = true
+
+    -- Fake floor for AC ground detection bypass
+    fakeFloor = Instance.new("Part")
+    fakeFloor.Name = "Grass"
+    fakeFloor.Size = Vector3.new(10, 0.2, 10)
+    fakeFloor.Anchored = true
+    fakeFloor.Transparency = 1
+    fakeFloor.CanCollide = false
+    fakeFloor.CastShadow = false
+    fakeFloor.Material = Enum.Material.Grass
+    fakeFloor.Parent = workspace
+    fakeFloorConn = RunService.Heartbeat:Connect(function()
+        if fakeFloor and fakeFloor.Parent and myHRP and myHRP.Parent then
+            fakeFloor.CFrame = CFrame.new(
+                myHRP.Position.X,
+                myHRP.Position.Y - 3,
+                myHRP.Position.Z
+            )
+        end
+    end)
 
     local origRunSoundId = nil
     local runSound = myHRP:FindFirstChild("Running")
@@ -843,6 +861,8 @@ local function startFly()
 
     
     if psConn then psConn:Disconnect() end
+    if fakeFloorConn then fakeFloorConn:Disconnect(); fakeFloorConn = nil end
+    if fakeFloor then pcall(function() fakeFloor:Destroy() end); fakeFloor = nil end
     local _fadeOut = 0.3 + (1 - math.clamp(_currentSpeedMag / math.max(_currentMaxSpeed, 1), 0, 1)) * 0.2
     if flyTrack then flyTrack:Stop(_fadeOut) end
     if flyFwdTrack then flyFwdTrack:Stop(_fadeOut) end
