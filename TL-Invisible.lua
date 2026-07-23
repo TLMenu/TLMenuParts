@@ -1,7 +1,5 @@
 local ENV = (typeof(getgenv) == "function" and getgenv()) or _G
 local RUNTIME_KEY = "__TL_InvisRuntime"
-
--- Altes Runtime-Cleanup
 local prev = ENV[RUNTIME_KEY]
 if type(prev) == "table" and type(prev.cleanup) == "function" then 
     pcall(prev.cleanup) 
@@ -20,6 +18,9 @@ runtime.cleanup = function()
         end)
     end
     runtime.instances = {}
+    
+    pcall(function() game:GetService("RunService"):UnbindFromRenderStep("__TL_InvisRender") end)
+    
     if ENV[RUNTIME_KEY] == runtime then ENV[RUNTIME_KEY] = nil end
 end
 ENV[RUNTIME_KEY] = runtime
@@ -27,7 +28,6 @@ ENV[RUNTIME_KEY] = runtime
 local function regInst(inst) table.insert(runtime.instances, inst); return inst end
 local function bind(sig, fn) local c = sig:Connect(fn); table.insert(runtime.connections, c); return c end
 
--- [Punkt 3] CoreGui entfernt (wurde nie verwendet)
 local Players      = game:GetService("Players")
 local RunService   = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -35,16 +35,11 @@ local UIS          = game:GetService("UserInputService")
 
 local lp = Players.LocalPlayer
 
-local _hasRenderStepped = pcall(function()
-    local c = RunService.RenderStepped:Connect(function() end); c:Disconnect()
-end)
-
 local invisActive     = false
 local invisParts      = {}
 local invisHeartConn  = nil
 local _invisHL        = nil
 local _invisSavedCF   = nil
--- [Punkt 3 & 4] _invGhostConn und _invisHealthConn komplett entfernt
 
 local function makeInvisSelfHL(ch)
     local PlayerGui = lp:FindFirstChild("PlayerGui")
@@ -76,7 +71,6 @@ local function makeInvisSelfHL(ch)
 end
 
 local function invisSetupParts()
-    -- [Punkt 5] Schutz vor Überschreiben der Originalwerte, wenn Unsichtbarkeit bereits aktiv ist
     if invisActive and #invisParts > 0 then return end
     
     invisParts = {}
@@ -94,6 +88,18 @@ local function startInvisHeartbeat()
     local cachedHum  = cachedChar and cachedChar:FindFirstChildOfClass("Humanoid")
     local cachedRoot = cachedChar and cachedChar:FindFirstChild("HumanoidRootPart")
     
+    local targetCF = nil
+    local origOff  = Vector3.zero
+    local isDesynced = false
+    
+    RunService:BindToRenderStep("__TL_InvisRender", Enum.RenderPriority.Camera.Value - 1, function()
+        if isDesynced and cachedRoot and cachedRoot.Parent and cachedHum and cachedHum.Parent then
+            cachedRoot.CFrame       = targetCF
+            cachedHum.CameraOffset  = origOff
+            isDesynced = false
+        end
+    end)
+
     invisHeartConn = RunService.Heartbeat:Connect(function()
         local c = lp.Character
         if c ~= cachedChar then
@@ -105,11 +111,12 @@ local function startInvisHeartbeat()
         local r = cachedRoot
         if not (invisActive and h and r) then return end
 
-        -- [Punkt 2] pcall entfernt, direkte Prüfung auf Parent & Health
         if h.Health <= 0 or not c.Parent then
             h.CameraOffset = Vector3.zero
             return
         end
+
+        if h.SeatPart ~= nil then return end
 
         for _, entry in ipairs(invisParts) do
             local part = entry.part
@@ -123,25 +130,14 @@ local function startInvisHeartbeat()
             _invisSavedCF = curCF
         end
 
-        -- [Punkt 2] pcalls durch schnelle Existenzprüfungen (Parent) im Loop ersetzt
-        local origOff = h.CameraOffset
+        origOff  = h.CameraOffset
+        targetCF = curCF
+
         if r.Parent and h.Parent then
             r.CFrame       = CFrame.new(curCF.Position.X, -200000, curCF.Position.Z)
             h.CameraOffset = Vector3.new(0, curCF.Position.Y + 200000, 0)
+            isDesynced     = true
         end
-
-        task.spawn(function()
-            if _hasRenderStepped then
-                RunService.RenderStepped:Wait()
-            else
-                task.wait()
-            end
-            -- [Punkt 2] pcall im Render-Frame entfernt
-            if r and r.Parent and h and h.Parent then
-                r.CFrame       = curCF
-                h.CameraOffset = origOff
-            end
-        end)
     end)
 end
 
@@ -150,6 +146,8 @@ local function setInvis(on)
 
     if invisHeartConn then pcall(function() invisHeartConn:Disconnect() end); invisHeartConn = nil end
     if _invisHL and _invisHL.Parent then pcall(function() _invisHL:Destroy() end); _invisHL = nil end
+    
+    pcall(function() RunService:UnbindFromRenderStep("__TL_InvisRender") end)
 
     local ch   = lp.Character
     local hum  = ch and ch:FindFirstChildOfClass("Humanoid")
@@ -182,8 +180,6 @@ local function setInvis(on)
     invisSetupParts()
     _invisHL = makeInvisSelfHL(ch)
 
-    -- [Punkt 4] Der nutzlose clientseitige Health-Loop wurde hier komplett entfernt
-
     local initCF = root and root.CFrame
     if initCF then _invisSavedCF = initCF end
 
@@ -200,6 +196,7 @@ end
 bind(lp.CharacterAdded, function(newChar)
     if invisHeartConn then pcall(function() invisHeartConn:Disconnect() end); invisHeartConn = nil end
     if _invisHL and _invisHL.Parent then pcall(function() _invisHL:Destroy() end); _invisHL = nil end
+    pcall(function() RunService:UnbindFromRenderStep("__TL_InvisRender") end)
 
     for _, entry in ipairs(invisParts) do
         if entry.part and entry.part.Parent then
@@ -209,30 +206,32 @@ bind(lp.CharacterAdded, function(newChar)
     invisParts    = {}
     _invisSavedCF = nil
 
-    task.defer(function()
-        local newHum = newChar:FindFirstChildOfClass("Humanoid")
-        if newHum then newHum.CameraOffset = Vector3.zero end
+    task.spawn(function()
+        local newHum  = newChar:WaitForChild("Humanoid", 5)
+        local newRoot = newChar:WaitForChild("HumanoidRootPart", 5)
+        
+        if not (newHum and newRoot) then return end
+        newHum.CameraOffset = Vector3.zero
+        
+        task.wait(0.3)
+        
+        if invisActive then
+            invisSetupParts()
+            _invisHL = makeInvisSelfHL(newChar)
+            setInvis(true)
+        else
+            invisSetupParts()
+        end
     end)
-
-    task.wait(0.5)
-    if invisActive then
-        invisSetupParts()
-        _invisHL = makeInvisSelfHL(newChar)
-        setInvis(true)
-    else
-        task.wait(0.5)
-        invisSetupParts()
-    end
 end)
 
--- [Punkt 9] Sauberes, einheitliches Environment-Binding über eine zentrale Tabelle
-runtime.start      = function() setInvis(true) end
-runtime.stop       = function() setInvis(false) end
-runtime.isActive   = function() return invisActive end
-runtime.setupParts = invisSetupParts
+runtime.start       = function() setInvis(true) end
+runtime.stop        = function() setInvis(false) end
+runtime.isActive    = function() return invisActive end
+runtime.setupParts  = invisSetupParts
 
-ENV._TL_Runtime    = runtime
-ENV._TL_setInvis   = setInvis
+ENV._TL_Runtime     = runtime
+ENV._TL_setInvis    = setInvis
 ENV._TL_invisActive = function() return invisActive end
 
 return runtime
