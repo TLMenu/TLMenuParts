@@ -63,10 +63,14 @@ function TLPlayerlistModule:Build(cfg)
     local GAP                         = 6
     local avatarCache                 = {}
     local rowCache                    = {}
-    local espHighlights               = {}
+    local espHighlights                = {}
     local _plFilterText               = ""
 
+    -- extra header space to make room for the dropdown result list underneath the searchbar
     local HEADER_H                    = 44
+    local SEARCH_ICON_ASSET           = "rbxassetid://3926305904" -- vector magnifier sprite sheet (replace with your icon pack id if different)
+    local SEARCH_ICON_RECT_OFFSET     = Vector2.new(964, 324)
+    local SEARCH_ICON_RECT_SIZE       = Vector2.new(36, 36)
 
     local countBadge                  = Instance.new("Frame", c)
     countBadge.Size                   = UDim2.new(0, 36, 0, 20)
@@ -84,30 +88,53 @@ function TLPlayerlistModule:Build(cfg)
     countLbl.TextXAlignment            = Enum.TextXAlignment.Center
     countLbl.Text                      = tostring(#Players:GetPlayers())
 
+    -- ============================================================
+    -- SEARCHBAR (redesigned: sharp corners + colored underline focus)
+    -- ============================================================
     local searchFrame                  = Instance.new("Frame", c)
+    searchFrame.Name                   = "TL_PL_SearchFrame"
     searchFrame.Size                   = UDim2.new(1, -PAD * 2, 0, 28)
     searchFrame.Position               = UDim2.new(0, PAD, 0, 6)
     searchFrame.BackgroundColor3       = C.bg2 or _C3_BG2
     searchFrame.BackgroundTransparency = 0
     searchFrame.BorderSizePixel        = 0
-    corner(searchFrame, 8)
+    searchFrame.ClipsDescendants       = false
+    corner(searchFrame, 4) -- sharp corners (was 8)
+
+    -- thin frame border on all sides (subtle), sharp radius
     local search_Stroke               = _makeDummyStroke(searchFrame)
     search_Stroke.Thickness           = 1
     search_Stroke.Color               = C.bg3 or _C3_BG3
     search_Stroke.Transparency        = 0.3
 
-    local searchIcon                  = Instance.new("TextLabel", searchFrame)
-    searchIcon.Size                   = UDim2.new(0, 24, 1, 0)
-    searchIcon.Position               = UDim2.new(0, 6, 0, 0)
-    searchIcon.BackgroundTransparency = 1
-    searchIcon.Text                   = "\xF0\x9F\x94\x8D"
-    searchIcon.Font                   = Enum.Font.GothamBold
-    searchIcon.TextSize               = 12
-    searchIcon.TextXAlignment         = Enum.TextXAlignment.Center
+    -- colored underline accent (the focus indicator) - sits as its own thin frame
+    -- so it can be 2px and independent from the UIStroke rounding
+    local searchUnderline              = Instance.new("Frame", searchFrame)
+    searchUnderline.Name               = "TL_PL_SearchUnderline"
+    searchUnderline.AnchorPoint        = Vector2.new(0, 1)
+    searchUnderline.Size               = UDim2.new(1, 0, 0, 2)
+    searchUnderline.Position           = UDim2.new(0, 0, 1, 1)
+    searchUnderline.BackgroundColor3   = C.accent
+    searchUnderline.BackgroundTransparency = 1 -- hidden until focused
+    searchUnderline.BorderSizePixel    = 0
+    searchUnderline.ZIndex             = 6
+
+    -- vector search icon (ImageLabel instead of emoji glyph)
+    local searchIcon                   = Instance.new("ImageLabel", searchFrame)
+    searchIcon.Name                    = "TL_PL_SearchIcon"
+    searchIcon.Size                    = UDim2.new(0, 14, 0, 14)
+    searchIcon.Position                = UDim2.new(0, 10, 0.5, -7)
+    searchIcon.BackgroundTransparency  = 1
+    searchIcon.Image                   = SEARCH_ICON_ASSET
+    searchIcon.ImageRectOffset         = SEARCH_ICON_RECT_OFFSET
+    searchIcon.ImageRectSize           = SEARCH_ICON_RECT_SIZE
+    searchIcon.ImageColor3             = C.sub or Color3.fromRGB(120, 120, 130)
+    searchIcon.ScaleType               = Enum.ScaleType.Fit
 
     local searchBox                   = Instance.new("TextBox", searchFrame)
-    searchBox.Size                    = UDim2.new(1, -58, 1, 0)
-    searchBox.Position                = UDim2.new(0, 28, 0, 0)
+    searchBox.Name                    = "TL_PL_SearchBox"
+    searchBox.Size                    = UDim2.new(1, -62, 1, 0)
+    searchBox.Position                = UDim2.new(0, 32, 0, 0)
     searchBox.BackgroundTransparency  = 1
     searchBox.Font                    = Enum.Font.Gotham
     searchBox.TextSize                = 12
@@ -116,14 +143,257 @@ function TLPlayerlistModule:Build(cfg)
     searchBox.PlaceholderColor3       = C.sub or Color3.fromRGB(120, 120, 130)
     searchBox.Text                    = ""
     searchBox.ClearTextOnFocus        = false
+    searchBox.TextXAlignment          = Enum.TextXAlignment.Left
     searchBox.ZIndex                  = 5
+
+    -- clear ("x") button, only visible once there's text
+    local searchClearBtn               = Instance.new("TextButton", searchFrame)
+    searchClearBtn.Name                = "TL_PL_SearchClear"
+    searchClearBtn.Size                = UDim2.new(0, 20, 0, 20)
+    searchClearBtn.AnchorPoint          = Vector2.new(1, 0.5)
+    searchClearBtn.Position             = UDim2.new(1, -6, 0.5, 0)
+    searchClearBtn.BackgroundTransparency = 1
+    searchClearBtn.Font                 = Enum.Font.GothamBold
+    searchClearBtn.Text                 = "\xC3\x97" -- "×"
+    searchClearBtn.TextSize             = 14
+    searchClearBtn.TextColor3           = C.sub or Color3.fromRGB(120, 120, 130)
+    searchClearBtn.Visible              = false
+    searchClearBtn.ZIndex               = 6
 
     searchBox.Focused:Connect(function()
         twP(search_Stroke, 0.15, { Color = C.accent, Transparency = 0.45 })
+        twP(searchUnderline, 0.15, { BackgroundTransparency = 0 })
     end)
     searchBox.FocusLost:Connect(function()
         twP(search_Stroke, 0.15, { Color = C.bg3 or _C3_BG3, Transparency = 0.3 })
+        if _plFilterText == "" then
+            twP(searchUnderline, 0.15, { BackgroundTransparency = 1 })
+        end
     end)
+
+    -- ============================================================
+    -- LIVE RESULT DROPDOWN (replaces card filtering while searching)
+    -- ============================================================
+    local DROPDOWN_ROW_H               = 40
+    local DROPDOWN_MAX_ROWS            = 6
+
+    local dropdownFrame                 = Instance.new("Frame", c)
+    dropdownFrame.Name                  = "TL_PL_Dropdown"
+    dropdownFrame.Size                  = UDim2.new(1, -PAD * 2, 0, 0)
+    dropdownFrame.Position              = UDim2.new(0, PAD, 0, 6 + 28) -- directly under searchFrame
+    dropdownFrame.BackgroundColor3      = C.bg2 or _C3_BG2
+    dropdownFrame.BackgroundTransparency = 0
+    dropdownFrame.BorderSizePixel       = 0
+    dropdownFrame.ClipsDescendants      = true
+    dropdownFrame.Visible               = false
+    corner(dropdownFrame, 4) -- sharp corners, matches searchbar
+    local dropdownStroke                = _makeDummyStroke(dropdownFrame)
+    dropdownStroke.Thickness            = 1
+    dropdownStroke.Color                = C.bg3 or _C3_BG3
+    dropdownStroke.Transparency         = 0.3
+
+    local dropdownList                  = Instance.new("ScrollingFrame", dropdownFrame)
+    dropdownList.Name                   = "TL_PL_DropdownList"
+    dropdownList.Size                   = UDim2.new(1, 0, 1, 0)
+    dropdownList.BackgroundTransparency  = 1
+    dropdownList.BorderSizePixel        = 0
+    dropdownList.ScrollBarThickness     = 3
+    dropdownList.CanvasSize             = UDim2.new(0, 0, 0, 0)
+
+    local dropdownEmptyLbl              = Instance.new("TextLabel", dropdownFrame)
+    dropdownEmptyLbl.Name               = "TL_PL_DropdownEmpty"
+    dropdownEmptyLbl.Size               = UDim2.new(1, 0, 1, 0)
+    dropdownEmptyLbl.BackgroundTransparency = 1
+    dropdownEmptyLbl.Font               = Enum.Font.Gotham
+    dropdownEmptyLbl.TextSize           = 12
+    dropdownEmptyLbl.TextColor3         = C.sub or Color3.fromRGB(150, 150, 160)
+    dropdownEmptyLbl.Text               = "No player found"
+    dropdownEmptyLbl.Visible            = false
+
+    local dropdownRowCache              = {} -- userId -> row instances, reused across filters
+
+    -- tracks which player (if any) is "pinned open" after being picked from the dropdown
+    local _pickedUserId                 = nil
+
+    local function getThreatRankInfo(pl)
+        local role = (_TL_refs and _TL_refs._TL_getThreatRole and _TL_refs._TL_getThreatRole(pl)) or nil
+        if not role then
+            return "Player", (C.bg3 or _C3_BG3), 0.35, (C.sub or Color3.fromRGB(120, 120, 130))
+        end
+        local lowRole     = role:lower()
+        local displayRole = role:gsub("^Group Role: ", "")
+        local isOwner     = lowRole:find("owner") or lowRole:find("besitzer")
+        local isAdmin     = lowRole:find("admin") or lowRole:find("administrator")
+        local isMod       = lowRole:find("moderator") or lowRole:find("mod")
+        local isManager   = lowRole:find("manager") or lowRole:find("management")
+        local isCreator   = lowRole:find("creator") or lowRole:find("star") or lowRole:find("video") or lowRole:find("influencer")
+
+        if isOwner then
+            return displayRole, Color3.fromRGB(255, 200, 0), 0.2, Color3.new(1, 1, 1)
+        elseif isManager or isAdmin or isMod then
+            return displayRole, Color3.fromRGB(220, 40, 40), 0.2, Color3.new(1, 1, 1)
+        elseif isCreator then
+            return displayRole, Color3.fromRGB(0, 140, 255), 0.2, Color3.new(1, 1, 1)
+        end
+        return displayRole, (C.bg3 or _C3_BG3), 0.35, (C.sub or Color3.fromRGB(120, 120, 130))
+    end
+
+    -- forward-declared; assigned once createRow/rebuildList exist below
+    local rebuildList
+    local selectPlayer
+
+    local function createDropdownRow(pl)
+        local row                      = Instance.new("TextButton", dropdownList)
+        row.Name                       = "ddRow_" .. pl.UserId
+        row.Size                       = UDim2.new(1, 0, 0, DROPDOWN_ROW_H)
+        row.BackgroundColor3           = C.bg2 or _C3_BG2
+        row.BackgroundTransparency     = 0
+        row.BorderSizePixel            = 0
+        row.AutoButtonColor            = false
+        row.Text                       = ""
+        row.ZIndex                     = 7
+
+        local avF                       = Instance.new("Frame", row)
+        avF.Size                        = UDim2.new(0, 26, 0, 26)
+        avF.Position                    = UDim2.new(0, 8, 0.5, -13)
+        avF.BackgroundColor3            = C.bg3 or _C3_BG3
+        avF.BackgroundTransparency      = 0.2
+        avF.BorderSizePixel             = 0
+        corner(avF, 99)
+        local clipF                      = Instance.new("Frame", avF)
+        clipF.Size                       = UDim2.new(1, 0, 1, 0)
+        clipF.BackgroundTransparency     = 1
+        clipF.ClipsDescendants           = true
+        corner(clipF, 99)
+        local avatar                      = Instance.new("ImageLabel", clipF)
+        avatar.Size                       = UDim2.new(1, 0, 1, 0)
+        avatar.BackgroundTransparency     = 1
+        avatar.ScaleType                  = Enum.ScaleType.Crop
+        avatar.ZIndex                     = 8
+        if avatarCache[pl.UserId] then
+            avatar.Image       = avatarCache[pl.UserId]
+            avatar.ImageColor3 = Color3.new(1, 1, 1)
+        else
+            avatar.Image       = "rbxassetid://142509179"
+            avatar.ImageColor3 = C.sub or Color3.fromRGB(100, 100, 110)
+            task.spawn(function()
+                local ok, url = pcall(function()
+                    return Players:GetUserThumbnailAsync(
+                        pl.UserId,
+                        Enum.ThumbnailType.HeadShot,
+                        Enum.ThumbnailSize.Size100x100
+                    )
+                end)
+                if ok and url and avatar.Parent then
+                    avatarCache[pl.UserId] = url
+                    avatar.Image           = url
+                    avatar.ImageColor3     = Color3.new(1, 1, 1)
+                end
+            end)
+        end
+
+        local nameLbl                    = Instance.new("TextLabel", row)
+        nameLbl.Size                      = UDim2.new(1, -140, 0, 16)
+        nameLbl.Position                  = UDim2.new(0, 42, 0, 6)
+        nameLbl.BackgroundTransparency    = 1
+        nameLbl.Font                      = Enum.Font.GothamBold
+        nameLbl.TextSize                  = 12
+        nameLbl.TextColor3                = C.text or Color3.new(1, 1, 1)
+        nameLbl.TextXAlignment             = Enum.TextXAlignment.Left
+        nameLbl.TextTruncate               = Enum.TextTruncate.AtEnd
+        nameLbl.Text                       = pl.DisplayName
+
+        local userLbl                     = Instance.new("TextLabel", row)
+        userLbl.Size                      = UDim2.new(1, -140, 0, 12)
+        userLbl.Position                  = UDim2.new(0, 42, 0, 21)
+        userLbl.BackgroundTransparency    = 1
+        userLbl.Font                      = Enum.Font.Gotham
+        userLbl.TextSize                  = 9
+        userLbl.TextColor3                = C.sub or Color3.fromRGB(120, 120, 130)
+        userLbl.TextXAlignment             = Enum.TextXAlignment.Left
+        userLbl.TextTruncate               = Enum.TextTruncate.AtEnd
+        userLbl.Text                       = "@" .. pl.Name
+
+        local rankLabel, rankBgCol, rankBgTrans, rankTextCol = getThreatRankInfo(pl)
+        local rankBg                      = Instance.new("Frame", row)
+        rankBg.Size                       = UDim2.new(0, 74, 0, 16)
+        rankBg.AnchorPoint                = Vector2.new(1, 0.5)
+        rankBg.Position                   = UDim2.new(1, -10, 0.5, 0)
+        rankBg.BackgroundColor3           = rankBgCol
+        rankBg.BackgroundTransparency     = rankBgTrans
+        rankBg.BorderSizePixel            = 0
+        corner(rankBg, 99)
+        local rankTxt                       = Instance.new("TextLabel", rankBg)
+        rankTxt.Size                        = UDim2.new(1, 0, 1, 0)
+        rankTxt.BackgroundTransparency      = 1
+        rankTxt.Font                        = Enum.Font.GothamBold
+        rankTxt.TextSize                    = 8
+        rankTxt.Text                        = rankLabel
+        rankTxt.TextColor3                  = rankTextCol
+        rankTxt.TextXAlignment              = Enum.TextXAlignment.Center
+        rankTxt.TextTruncate                = Enum.TextTruncate.AtEnd
+
+        row.MouseEnter:Connect(function()
+            playHoverSound()
+            twP(row, 0.08, { BackgroundColor3 = C.bg3 or _C3_BG3 })
+        end)
+        row.MouseLeave:Connect(function()
+            twP(row, 0.08, { BackgroundColor3 = C.bg2 or _C3_BG2 })
+        end)
+        row.MouseButton1Click:Connect(function()
+            if selectPlayer then selectPlayer(pl) end
+        end)
+
+        panelColorHooks[#panelColorHooks + 1] = function()
+            pcall(function() row.BackgroundColor3 = C.bg2 or _C3_BG2 end)
+            pcall(function() avF.BackgroundColor3 = C.bg3 or _C3_BG3 end)
+            pcall(function() nameLbl.TextColor3 = C.text end)
+            pcall(function() userLbl.TextColor3 = C.sub end)
+        end
+
+        return row
+    end
+
+    local function rebuildDropdown()
+        local filter = _plFilterText:lower()
+        dropdownList:ClearAllChildren()
+        dropdownRowCache = {}
+
+        if filter == "" then
+            dropdownFrame.Visible = false
+            dropdownFrame.Size = UDim2.new(1, -PAD * 2, 0, 0)
+            return
+        end
+
+        local matches = {}
+        for _, pl in ipairs(Players:GetPlayers()) do
+            if pl ~= LocalPlayer then
+                if pl.Name:lower():find(filter, 1, true) or pl.DisplayName:lower():find(filter, 1, true) then
+                    table.insert(matches, pl)
+                end
+            end
+        end
+        table.sort(matches, function(a, b) return a.Name < b.Name end)
+
+        dropdownFrame.Visible = true
+
+        if #matches == 0 then
+            dropdownEmptyLbl.Visible = true
+            dropdownFrame.Size = UDim2.new(1, -PAD * 2, 0, 48)
+            return
+        end
+
+        dropdownEmptyLbl.Visible = false
+        for i, pl in ipairs(matches) do
+            local row = createDropdownRow(pl)
+            row.Position = UDim2.new(0, 0, 0, (i - 1) * DROPDOWN_ROW_H)
+            dropdownRowCache[pl.UserId] = row
+        end
+
+        local visibleRows = math.min(#matches, DROPDOWN_MAX_ROWS)
+        dropdownList.CanvasSize = UDim2.new(0, 0, 0, #matches * DROPDOWN_ROW_H)
+        dropdownFrame.Size = UDim2.new(1, -PAD * 2, 0, visibleRows * DROPDOWN_ROW_H)
+    end
 
     local hdrLine                       = Instance.new("Frame", c)
     hdrLine.Size                        = UDim2.new(1, -PAD * 2, 0, 1)
@@ -531,9 +801,14 @@ function TLPlayerlistModule:Build(cfg)
         return card
     end
 
-    local function rebuildList()
+    -- ============================================================
+    -- rebuildList now has 3 states:
+    --  1) filter == "" and no pick            -> show ALL cards (unchanged default)
+    --  2) filter ~= ""                        -> hide ALL cards, show dropdown instead
+    --  3) filter == "" but a player was picked -> show ONLY that player's card
+    -- ============================================================
+    rebuildList = function()
         local plrs      = Players:GetPlayers()
-        local filter    = _plFilterText:lower()
         local activeIds = {}
 
         for _, pl in ipairs(plrs) do activeIds[pl.UserId] = true end
@@ -542,6 +817,18 @@ function TLPlayerlistModule:Build(cfg)
                 entry.row:Destroy(); rowCache[uid] = nil
             end
         end
+
+        -- searching: dropdown owns the UI, cards panel stays empty
+        if _plFilterText ~= "" then
+            for _, entry in pairs(rowCache) do entry.row.Visible = false end
+            noResultsLbl.Visible = false
+            hdrLine.Visible = false
+            p.Size = UDim2.new(0, PANEL_W, 0, HEADER_H + 6 + dropdownFrame.AbsoluteSize.Y + 16)
+            if countLbl and countLbl.Parent then countLbl.Text = tostring(#plrs) end
+            return
+        end
+
+        hdrLine.Visible = true
 
         table.sort(plrs, function(a, b)
             local aMod = _TL_refs and _TL_refs._TL_isThreatPlayer and _TL_refs._TL_isThreatPlayer(a) or false
@@ -554,9 +841,8 @@ function TLPlayerlistModule:Build(cfg)
         for _, pl in ipairs(plrs) do
             if pl == Players.LocalPlayer then continue end
 
-            local show = filter == ""
-                or pl.Name:lower():find(filter, 1, true)
-                or pl.DisplayName:lower():find(filter, 1, true)
+            -- if a player was picked from the dropdown, only that card shows
+            local show = (_pickedUserId == nil) or (_pickedUserId == pl.UserId)
 
             local entry = rowCache[pl.UserId]
             if show then
@@ -581,10 +867,10 @@ function TLPlayerlistModule:Build(cfg)
 
         local contentH = HEADER_H + visIdx * (ROW_H_ACTUAL + GAP) + 16
 
-        if visIdx == 0 and _plFilterText ~= "" then
-            noResultsLbl.Text = "No player found for: \"" .. _plFilterText .. "\""
-            noResultsLbl.Visible = true
-            contentH = 420
+        if visIdx == 0 and _pickedUserId ~= nil then
+            -- picked player left the game mid-view
+            _pickedUserId = nil
+            noResultsLbl.Visible = false
             c.CanvasSize = UDim2.new(0, 0, 0, 0)
         else
             noResultsLbl.Visible = false
@@ -595,9 +881,30 @@ function TLPlayerlistModule:Build(cfg)
         p.Size = UDim2.new(0, PANEL_W, 0, math.max(minH, math.min(contentH, 420)))
     end
 
+    -- called when a dropdown row is clicked: pin that player's card, clear the search
+    selectPlayer = function(pl)
+        _pickedUserId = pl.UserId
+        searchBox.Text = ""
+        -- Text change already triggers rebuildDropdown+rebuildList via the signal below,
+        -- but we set _pickedUserId first so rebuildList shows only this player.
+    end
+
     searchBox:GetPropertyChangedSignal("Text"):Connect(function()
         _plFilterText = searchBox.Text or ""
+        searchClearBtn.Visible = (_plFilterText ~= "")
+        if _plFilterText ~= "" then
+            _pickedUserId = nil -- typing again clears any pinned single-card view
+            twP(searchUnderline, 0.15, { BackgroundTransparency = 0 })
+        elseif not searchBox:IsFocused() then
+            twP(searchUnderline, 0.15, { BackgroundTransparency = 1 })
+        end
+        rebuildDropdown()
         rebuildList()
+    end)
+
+    searchClearBtn.MouseButton1Click:Connect(function()
+        searchBox.Text = ""
+        searchBox:CaptureFocus()
     end)
 
     panelColorHooks[#panelColorHooks + 1] = function()
@@ -607,8 +914,14 @@ function TLPlayerlistModule:Build(cfg)
         pcall(function() hdrLine.BackgroundColor3 = C.bg3 or _C3_BG3 end)
         pcall(function() searchFrame.BackgroundColor3 = C.bg2 or _C3_BG2 end)
         pcall(function() search_Stroke.Color = C.bg3 or _C3_BG3 end)
+        pcall(function() searchUnderline.BackgroundColor3 = C.accent end)
+        pcall(function() searchIcon.ImageColor3 = C.sub end)
         pcall(function() searchBox.TextColor3 = C.text end)
         pcall(function() searchBox.PlaceholderColor3 = C.sub end)
+        pcall(function() searchClearBtn.TextColor3 = C.sub end)
+        pcall(function() dropdownFrame.BackgroundColor3 = C.bg2 or _C3_BG2 end)
+        pcall(function() dropdownStroke.Color = C.bg3 or _C3_BG3 end)
+        pcall(function() dropdownEmptyLbl.TextColor3 = C.sub end)
 
         for _, ch in ipairs(p:GetChildren()) do
             pcall(function()
@@ -657,7 +970,7 @@ function TLPlayerlistModule:Build(cfg)
 
     rebuildList()
     self._connections[#self._connections + 1] = Players.PlayerAdded:Connect(function()
-        task.wait(0.15); rebuildList()
+        task.wait(0.15); rebuildDropdown(); rebuildList()
     end)
     self._connections[#self._connections + 1] = Players.PlayerRemoving:Connect(function(pl)
         task.wait(0.15)
@@ -665,6 +978,8 @@ function TLPlayerlistModule:Build(cfg)
         if entry then
             entry.row:Destroy(); rowCache[pl.UserId] = nil
         end
+        if _pickedUserId == pl.UserId then _pickedUserId = nil end
+        rebuildDropdown()
         rebuildList()
     end)
 
