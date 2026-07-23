@@ -677,6 +677,48 @@ local function calculateTargetCFrame(mode, modeData, dt)
 
     local x, y, z = modeData.x or 0, modeData.y or 0, modeData.z or 0
 
+    -- Detect if target is in a floor emote (lying down, sitting, etc.)
+    -- Check UpperTorso Y offset relative to HRP — large negative = lying on ground
+    local groundCorrection = 0
+    local targetChar = State.targetChar
+    if targetChar and State.targetHRP then
+        local upperTorso = targetChar:FindFirstChild("UpperTorso")
+            or targetChar:FindFirstChild("Torso")
+        if upperTorso then
+            local hrpCF = State.targetHRP.CFrame
+            local torsoCF = upperTorso.CFrame
+            local localOffset = hrpCF:PointToObjectSpace(torsoCF.Position)
+            -- Standing R15: localOffset.Y ~= +0.2
+            -- Lying down:   localOffset.Y ~= -0.3 to -0.8
+            if localOffset.Y < 0 then
+                groundCorrection = localOffset.Y * 0.8
+            end
+        else
+            -- R6: no UpperTorso, check if HRP is very close to ground (raycast)
+            local rayOrigin = State.targetHRP.Position
+            local rayDir = Vector3.new(0, -5, 0)
+            local rayParams = RaycastParams.new()
+            rayParams.FilterDescendantsInstances = {targetChar}
+            rayParams.FilterType = Enum.RaycastFilterType.Exclude
+            local rayResult = workspace:Raycast(rayOrigin, rayDir, rayParams)
+            if rayResult and rayResult.Distance < 1.5 then
+                -- HRP is very close to ground — likely a floor emote
+                groundCorrection = -math.min(rayResult.Distance * 0.3, 0.8)
+            end
+        end
+        -- Ragdoll state
+        local hum = getHumanoid(targetChar)
+        if hum then
+            local state = hum:GetState()
+            if state == Enum.HumanoidStateType.Ragdoll then
+                groundCorrection = groundCorrection - 0.4
+            end
+        end
+    end
+
+    -- Apply ground correction to y offset so attachment stays near ground
+    y = y + groundCorrection
+
     if modeData.osc and modeData.oscSpeed then
         local key = mode .. "_osc"
         if modeData.useOscTimer then
