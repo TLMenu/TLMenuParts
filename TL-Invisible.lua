@@ -41,6 +41,10 @@ local invisHeartConn  = nil
 local _invisHL        = nil
 local _invisSavedCF   = nil
 
+-- Movement tracking: capture input before teleport so movement works
+local _lastMoveDir    = Vector3.zero
+local _lastVelocity   = Vector3.zero
+
 local function makeInvisSelfHL(ch)
     local PlayerGui = lp:FindFirstChild("PlayerGui")
     if not PlayerGui then return nil end
@@ -91,16 +95,18 @@ local function startInvisHeartbeat()
     local targetCF = nil
     local origOff  = Vector3.zero
     local isDesynced = false
+    local savedRealCF = nil
     
     RunService:BindToRenderStep("__TL_InvisRender", Enum.RenderPriority.Camera.Value - 1, function()
         if isDesynced and cachedRoot and cachedRoot.Parent and cachedHum and cachedHum.Parent then
+            -- Restore visual position for local player
             cachedRoot.CFrame       = targetCF
             cachedHum.CameraOffset  = origOff
             isDesynced = false
         end
     end)
 
-    invisHeartConn = RunService.Heartbeat:Connect(function()
+    invisHeartConn = RunService.Heartbeat:Connect(function(dt)
         local c = lp.Character
         if c ~= cachedChar then
             cachedChar = c
@@ -130,8 +136,27 @@ local function startInvisHeartbeat()
             _invisSavedCF = curCF
         end
 
+        -- CAPTURE movement input BEFORE teleport
+        -- At extreme Y the Humanoid can't process input, so read it while still at normal pos
+        local moveDir  = h.MoveDirection
+        local vel      = r.AssemblyLinearVelocity
+
+        -- Use MoveDirection if available, otherwise keep last known
+        if moveDir.Magnitude > 0.05 then
+            _lastMoveDir = moveDir
+        end
+
+        -- If we have savedRealCF (from previous frame's restore), calculate actual movement
+        if savedRealCF and savedRealCF.Position.Y > -100000 then
+            -- Apply movement to saved position
+            local speed = h.WalkSpeed or 16
+            local moveOffset = _lastMoveDir * speed * dt
+            savedRealCF = savedRealCF + moveOffset
+        end
+
         origOff  = h.CameraOffset
-        targetCF = curCF
+        targetCF = savedRealCF or curCF
+        savedRealCF = targetCF
 
         if r.Parent and h.Parent then
             r.CFrame       = CFrame.new(curCF.Position.X, -200000, curCF.Position.Z)
@@ -162,6 +187,9 @@ local function setInvis(on)
             hum.CameraOffset = Vector3.zero
         end
 
+        _lastMoveDir  = Vector3.zero
+        _lastVelocity = Vector3.zero
+
         task.spawn(function()
             task.wait(0.05)
             for _, entry in ipairs(invisParts) do
@@ -182,6 +210,9 @@ local function setInvis(on)
 
     local initCF = root and root.CFrame
     if initCF then _invisSavedCF = initCF end
+
+    _lastMoveDir  = Vector3.zero
+    _lastVelocity = Vector3.zero
 
     task.spawn(function()
         if not invisActive then return end
