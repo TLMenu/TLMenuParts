@@ -1176,6 +1176,23 @@ function M.stopBB()
         safe(function()
             Deps.sethiddenproperty(myHRP, "PhysicsRepRootPart", nil)
             clearVelocity(myHRP)
+            -- Raycast down to find ground, then snap character to it
+            local rayOrigin = myHRP.Position + Vector3.new(0, 2, 0)
+            local rayDir = Vector3.new(0, -50, 0)
+            local rayParams = RaycastParams.new()
+            rayParams.FilterDescendantsInstances = {State.myChar}
+            rayParams.FilterType = Enum.RaycastFilterType.Exclude
+            local rayResult = workspace:Raycast(rayOrigin, rayDir, rayParams)
+            if rayResult then
+                local groundY = rayResult.Position.Y + 3
+                myHRP.CFrame = CFrame.new(
+                    Vector3.new(myHRP.Position.X, groundY, myHRP.Position.Z)
+                ) * myHRP.CFrame.Rotation
+            else
+                myHRP.CFrame = CFrame.new(
+                    Vector3.new(myHRP.Position.X, State.lastSafeY + 3, myHRP.Position.Z)
+                ) * myHRP.CFrame.Rotation
+            end
             myHRP.Anchored = false
         end, "stopBB:HRP")
     end
@@ -1184,9 +1201,18 @@ function M.stopBB()
         safe(function()
             myHum.PlatformStand = false
             myHum.WalkSpeed     = 16
+            myHum.JumpPower     = 50
+            myHum.JumpHeight    = 7.2
             myHum:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
             myHum:SetStateEnabled(Enum.HumanoidStateType.Dead, true)
+            myHum:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
+            myHum:SetStateEnabled(Enum.HumanoidStateType.Running, true)
             myHum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            task.delay(0.15, function()
+                if myHum and myHum.Parent then
+                    myHum:ChangeState(Enum.HumanoidStateType.Running)
+                end
+            end)
         end, "stopBB:Humanoid")
     end
 
