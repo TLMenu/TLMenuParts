@@ -43,6 +43,27 @@ function HomeTab.Init(ctx)
         return p, c
     end
     local C = ctx.C or {
+
+    local _C3_DEF_BG   = Color3.fromRGB(18, 18, 20)
+    local _C3_DEF_BG2  = Color3.fromRGB(26, 26, 28)
+    local _C3_DEF_BG3  = Color3.fromRGB(34, 34, 38)
+    local _C3_DEF_ACC  = Color3.fromRGB(0, 170, 255)
+    local _C3_DEF_SUB  = Color3.fromRGB(130, 135, 145)
+    local _C3_DEF_TXT  = Color3.fromRGB(255, 255, 255)
+    
+    if type(C) == "table" then
+        setmetatable(C, {
+            __index = function(_, k)
+                if k == "bg" or k == "bg1" or k == "panelBg" then return _C3_DEF_BG end
+                if k == "bg2" or k == "panelHdr" then return _C3_DEF_BG2 end
+                if k == "bg3" or k == "bg4" then return _C3_DEF_BG3 end
+                if k == "accent" or k == "accent2" then return _C3_DEF_ACC end
+                if k == "sub" or k == "sub2" then return _C3_DEF_SUB end
+                if k == "text" or k == "white" then return _C3_DEF_TXT end
+                return Color3.fromRGB(120, 120, 130)
+            end
+        })
+    end
         accent = Color3.fromRGB(0, 170, 255),
         accent2 = Color3.fromRGB(0, 200, 255),
         sub = Color3.fromRGB(150, 150, 150),
@@ -165,7 +186,7 @@ makePanel("Home", C.accent)
                 end
                 for _, ch in ipairs(p:GetChildren()) do
                     if ch:IsA("Frame") and ch.Size.Y.Offset == 48 then
-                        ch.BackgroundColor3 = C.panelHdr
+                        ch.BackgroundColor3 = C.panelHdr or Color3.fromRGB(26, 26, 28)
                         ch.BackgroundTransparency = 0
                         local g = ch:FindFirstChildOfClass("UIGradient"); if g then g:Destroy() end
                     end
@@ -404,7 +425,7 @@ makePanel("Home", C.accent)
                 local sonarRing = Instance.new("Frame", _u.profCard)
                 sonarRing.Size = _u.profAvWrap.Size
                 sonarRing.Position = _u.profAvWrap.Position
-                sonarRing.BackgroundColor3 = C.accent
+                sonarRing.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255)
                 sonarRing.BackgroundTransparency = 0.6
                 sonarRing.BorderSizePixel = 0
                 Instance.new("UICorner", sonarRing).CornerRadius = UDim.new(1, 0)
@@ -475,7 +496,7 @@ makePanel("Home", C.accent)
                 _u.profDot = Instance.new("Frame", _u.profCard)
                 _u.profDot.Size = UDim2.new(0, 8, 0, 8)
                 _u.profDot.Position = UDim2.new(0, TX, 0, 66)
-                _u.profDot.BackgroundColor3 = C.accent
+                _u.profDot.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255)
                 _u.profDot.BorderSizePixel = 0
                 Instance.new("UICorner", _u.profDot).CornerRadius = UDim.new(1, 0)
 
@@ -506,7 +527,7 @@ makePanel("Home", C.accent)
                 _u.verF = Instance.new("Frame", _u.profCard)
                 _u.verF.Size = UDim2.new(0, 64, 0, 24)
                 _u.verF.Position = UDim2.new(1, -78, 0, 14)
-                _u.verF.BackgroundColor3 = C.accent; _u.verF.BackgroundTransparency = 0.85
+                _u.verF.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255); _u.verF.BackgroundTransparency = 0.85
                 _u.verF.BorderSizePixel = 0
                 Instance.new("UICorner", _u.verF).CornerRadius = UDim.new(0, 12)
 
