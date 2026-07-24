@@ -43,6 +43,27 @@ function SettingsTab.Init(ctx)
         return p, c
     end
     local C = ctx.C or {
+
+    local _C3_DEF_BG   = Color3.fromRGB(18, 18, 20)
+    local _C3_DEF_BG2  = Color3.fromRGB(26, 26, 28)
+    local _C3_DEF_BG3  = Color3.fromRGB(34, 34, 38)
+    local _C3_DEF_ACC  = Color3.fromRGB(0, 170, 255)
+    local _C3_DEF_SUB  = Color3.fromRGB(130, 135, 145)
+    local _C3_DEF_TXT  = Color3.fromRGB(255, 255, 255)
+    
+    if type(C) == "table" then
+        setmetatable(C, {
+            __index = function(_, k)
+                if k == "bg" or k == "bg1" or k == "panelBg" then return _C3_DEF_BG end
+                if k == "bg2" or k == "panelHdr" then return _C3_DEF_BG2 end
+                if k == "bg3" or k == "bg4" then return _C3_DEF_BG3 end
+                if k == "accent" or k == "accent2" then return _C3_DEF_ACC end
+                if k == "sub" or k == "sub2" then return _C3_DEF_SUB end
+                if k == "text" or k == "white" then return _C3_DEF_TXT end
+                return Color3.fromRGB(120, 120, 130)
+            end
+        })
+    end
         accent = Color3.fromRGB(0, 170, 255),
         accent2 = Color3.fromRGB(0, 200, 255),
         sub = Color3.fromRGB(150, 150, 150),
@@ -239,7 +260,7 @@ function SettingsTab.Init(ctx)
                         local _posCard = Instance.new("Frame", genPage)
                         _posCard.Size = UDim2.new(1, 0, 0, POS_H)
                         _posCard.Position = UDim2.new(0, 0, 0, POS_Y)
-                        _posCard.BackgroundColor3 = C.bg2
+                        _posCard.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28)
                         _posCard.BackgroundTransparency = 0
                         _posCard.BorderSizePixel = 0
                         corner(_posCard, 12)
@@ -274,10 +295,10 @@ function SettingsTab.Init(ctx)
                             task.spawn(saveData)
                             for i, btn in pairs(_posBtns) do
                                 if i == pos then
-                                    btn.BackgroundColor3 = C.accent
+                                    btn.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255)
                                     btn.TextColor3 = Color3.new(1, 1, 1)
                                 else
-                                    btn.BackgroundColor3 = C.bg3
+                                    btn.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38)
                                     btn.TextColor3 = C.sub
                                 end
                             end
@@ -308,14 +329,14 @@ function SettingsTab.Init(ctx)
 
                         _panelColorHooks[#_panelColorHooks + 1] = function()
                             pcall(function()
-                                _posCard.BackgroundColor3 = C.bg2
+                                _posCard.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28)
                                 _posNameLbl.TextColor3 = C.text
                                 _posSubLbl.TextColor3 = C.sub
                                 for i, btn in pairs(_posBtns) do
                                     if i == settingsState.guiPosition then
-                                        btn.BackgroundColor3 = C.accent
+                                        btn.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255)
                                     else
-                                        btn.BackgroundColor3 = C.bg3
+                                        btn.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38)
                                     end
                                     btn.TextColor3 = i == settingsState.guiPosition and Color3.new(1, 1, 1) or C.sub
                                 end
@@ -330,7 +351,7 @@ function SettingsTab.Init(ctx)
                         local _gsCard = Instance.new("Frame", genPage)
                         _gsCard.Size = UDim2.new(1, 0, 0, SLIDER_H)
                         _gsCard.Position = UDim2.new(0, 0, 0, SLIDER_Y)
-                        _gsCard.BackgroundColor3 = C.bg2
+                        _gsCard.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28)
                         _gsCard.BackgroundTransparency = 0
                         _gsCard.BorderSizePixel = 0
                         corner(_gsCard, 12)
@@ -368,13 +389,13 @@ function SettingsTab.Init(ctx)
                         local _gsTrack = Instance.new("Frame", _gsCard)
                         _gsTrack.Size = UDim2.new(1, -28, 0, 4)
                         _gsTrack.Position = UDim2.new(0, 14, 0, 46)
-                        _gsTrack.BackgroundColor3 = C.bg3
+                        _gsTrack.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38)
                         _gsTrack.BackgroundTransparency = 0.2
                         _gsTrack.BorderSizePixel = 0
                         corner(_gsTrack, 99)
 
                         local _gsFill = Instance.new("Frame", _gsTrack)
-                        _gsFill.BackgroundColor3 = C.accent
+                        _gsFill.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255)
                         _gsFill.BackgroundTransparency = 0
                         _gsFill.BorderSizePixel = 0
                         corner(_gsFill, 99)
@@ -392,7 +413,7 @@ function SettingsTab.Init(ctx)
                         local _gsApplyBtn = Instance.new("TextButton", _gsCard)
                         _gsApplyBtn.Size = UDim2.new(0, 56, 0, 20)
                         _gsApplyBtn.Position = UDim2.new(1, -68, 0, 55)
-                        _gsApplyBtn.BackgroundColor3 = C.accent
+                        _gsApplyBtn.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255)
                         _gsApplyBtn.Text = "Apply"
                         _gsApplyBtn.Font = Enum.Font.GothamBold
                         _gsApplyBtn.TextSize = 11
@@ -404,7 +425,7 @@ function SettingsTab.Init(ctx)
                         local _gsResetBtn = Instance.new("TextButton", _gsCard)
                         _gsResetBtn.Size = UDim2.new(0, 56, 0, 20)
                         _gsResetBtn.Position = UDim2.new(1, -130, 0, 55)
-                        _gsResetBtn.BackgroundColor3 = C.bg3
+                        _gsResetBtn.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38)
                         _gsResetBtn.Text = "Reset"
                         _gsResetBtn.Font = Enum.Font.GothamBold
                         _gsResetBtn.TextSize = 11
@@ -537,15 +558,15 @@ function SettingsTab.Init(ctx)
                         
                         _panelColorHooks[#_panelColorHooks + 1] = function()
                             pcall(function()
-                                _gsCard.BackgroundColor3 = C.bg2
+                                _gsCard.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28)
                                 _gsNameLbl.TextColor3 = C.text
                                 _gsSubLbl.TextColor3 = C.sub
                                 _gsValLbl.TextColor3 = C.accent
-                                _gsFill.BackgroundColor3 = C.accent
+                                _gsFill.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255)
                                 _gsKnobStr.Color = C.accent
-                                _gsTrack.BackgroundColor3 = C.bg3
-                                _gsApplyBtn.BackgroundColor3 = C.accent
-                                _gsResetBtn.BackgroundColor3 = C.bg3
+                                _gsTrack.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38)
+                                _gsApplyBtn.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255)
+                                _gsResetBtn.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38)
                                 _gsResetBtn.TextColor3 = C.text
                             end)
                         end
@@ -623,7 +644,7 @@ function SettingsTab.Init(ctx)
                             local row = Instance.new("Frame", kbContainer)
                             row.Size = UDim2.new(1, 0, 0, 52)
                             row.Position = UDim2.new(0, 0, 0, yPos)
-                            row.BackgroundColor3 = C.bg2 or _C3_BG2
+                            row.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28) or _C3_BG2
                             row.BackgroundTransparency = _TL_isImgTheme(_TL_activeThemeId) and
                             1 or 0; row.BorderSizePixel = 0
                             corner(row, 14)
@@ -649,7 +670,7 @@ function SettingsTab.Init(ctx)
                             local rowDot = Instance.new("Frame", row)
                             rowDot.Size = UDim2.new(0, 4, 0, 28); rowDot.Visible = false; rowDot.Position = UDim2.new(0,
                                 0, 0.5, -14)
-                            rowDot.BackgroundColor3 = C.accent or C.accent2; rowDot.BackgroundTransparency = 0.3
+                            rowDot.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255) or C.accent2; rowDot.BackgroundTransparency = 0.3
                             rowDot.BorderSizePixel = 0; corner(rowDot, 99)
                             local lbl = Instance.new("TextLabel", row)
                             lbl.Size = UDim2.new(0, 160, 1, 0)
@@ -672,7 +693,7 @@ function SettingsTab.Init(ctx)
                             local keyCard = Instance.new("Frame", row)
                             keyCard.Size = UDim2.new(0, 90, 0, 36)
                             keyCard.Position = UDim2.new(1, -100, 0.5, -18)
-                            keyCard.BackgroundColor3 = C.bg3 or _C3_BG3
+                            keyCard.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG3
                             keyCard.BackgroundTransparency = 0.3
                             keyCard.BorderSizePixel = 0
                             corner(keyCard, 10)
@@ -936,7 +957,7 @@ local themePage = Instance.new("Frame", subArea)
                 local function createCollapsibleCard(parent, titleText, layoutOrder, heightWhenExpanded)
                     local card = Instance.new("Frame", parent)
                     card.Size = UDim2.new(1, 0, 0, 46)
-                    card.BackgroundColor3 = C.bg2 or Color3.fromRGB(20, 20, 20)
+                    card.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28) or Color3.fromRGB(20, 20, 20)
                     card.BackgroundTransparency = 0
                     card.BorderSizePixel = 0
                     card.ClipsDescendants = true
@@ -1045,13 +1066,13 @@ local themePage = Instance.new("Frame", subArea)
 
                     toggleBtn.MouseEnter:Connect(function()
                         if not isOpen then
-                            twP(card, 0.15, { BackgroundColor3 = C.bg3 or Color3.fromRGB(28, 28, 28) },
+                            twP(card, 0.15, { BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or Color3.fromRGB(28, 28, 28) },
                                 Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
                         end
                     end)
                     toggleBtn.MouseLeave:Connect(function()
                         if not isOpen then
-                            twP(card, 0.15, { BackgroundColor3 = C.bg2 or Color3.fromRGB(20, 20, 20) },
+                            twP(card, 0.15, { BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28) or Color3.fromRGB(20, 20, 20) },
                                 Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
                         end
                     end)
@@ -3116,7 +3137,7 @@ local themePage = Instance.new("Frame", subArea)
                 switchCat = function(id)
                     for _, pg in pairs(subPages) do pg.Visible = false end
                     for _, cb in ipairs(catBtns) do
-                        twP(cb.card, 0.15, { BackgroundColor3 = C.bg2 or _C3_BG2 })
+                        twP(cb.card, 0.15, { BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28) or _C3_BG2 })
                         twP(cb.lbl, 0.15, { TextColor3 = C.sub or _C3_SUB })
                         cb.cStr.Color = C.bg3 or _C3_BG3; cb.cStr.Transparency = 0.3
                         cb.selBar.Visible = false
@@ -3156,7 +3177,7 @@ local themePage = Instance.new("Frame", subArea)
                     end
                     for _, cb in ipairs(catBtns) do
                         if cb.id == id then
-                            twP(cb.card, 0.20, { BackgroundColor3 = C.bg3 or _C3_BG4 })
+                            twP(cb.card, 0.20, { BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG4 })
                             twP(cb.lbl, 0.20, { TextColor3 = C.text })
                             cb.cStr.Color = cb.col; cb.cStr.Transparency = 0.5
                             cb.selBar.Visible = true
@@ -3177,7 +3198,7 @@ local themePage = Instance.new("Frame", subArea)
                     local card = Instance.new("Frame", grid)
                     card.Size = UDim2.new(0, CARD_W_S, 0, CARD_H_S)
                     card.Position = UDim2.new(0, xOff, 0, 0)
-                    card.BackgroundColor3 = C.bg2; card.BackgroundTransparency = _TL_isImgTheme(_TL_activeThemeId) and
+                    card.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28); card.BackgroundTransparency = _TL_isImgTheme(_TL_activeThemeId) and
                     1 or 0
                     card.BorderSizePixel = 0; corner(card, 12)
                     local cStr = _makeDummyStroke(card)
@@ -3201,7 +3222,7 @@ local themePage = Instance.new("Frame", subArea)
                     end
                     local selBar = Instance.new("Frame", card)
                     selBar.Size = UDim2.new(1, -16, 0, 2); selBar.Position = UDim2.new(0, 8, 0, 0)
-                    selBar.BackgroundColor3 = cat.col; selBar.BackgroundTransparency = 0
+                    selBar.BackgroundColor3 = (cat and cat.col) or Color3.fromRGB(0, 170, 255); selBar.BackgroundTransparency = 0
                     selBar.BorderSizePixel = 0; selBar.Visible = false; corner(selBar, 99)
                     
                     local _iconRef = nil
@@ -3237,12 +3258,12 @@ local themePage = Instance.new("Frame", subArea)
                         if _isMobile then return end
                         _sc._playHoverSound()
                         if activeCat ~= catId then
-                            twP(card, 0.1, { BackgroundColor3 = C.bg3 or _C3_BG4 })
+                            twP(card, 0.1, { BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG4 })
                         end
                     end)
                     btn.MouseLeave:Connect(function()
                         if activeCat ~= catId then
-                            twP(card, 0.1, { BackgroundColor3 = C.bg2 or _C3_BG2 })
+                            twP(card, 0.1, { BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28) or _C3_BG2 })
                         end
                     end)
                     btn.MouseButton1Click:Connect(function()
