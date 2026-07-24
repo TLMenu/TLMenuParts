@@ -2481,7 +2481,7 @@ local _TL_THEMES = {
                         _sc._playHoverSound()
                         TS:Create(addBtn, TweenInfo.new(0.2), {
                             BackgroundTransparency = 0.2,
-                            BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255) or Color3.fromRGB(0, 200, 255)
+                            BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255)
                         }):Play()
                         TS:Create(addSt, TweenInfo.new(0.2), {
                             Transparency = 0
@@ -2532,7 +2532,7 @@ local _TL_THEMES = {
                         _sc._playHoverSound()
                         TS:Create(namesBtn, TweenInfo.new(0.2), {
                             BackgroundTransparency = 0.2,
-                            BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255)2 or Color3.fromRGB(0, 160, 220)
+                            BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255)
                         }):Play()
                         TS:Create(namesSt, TweenInfo.new(0.2), {
                             Transparency = 0
@@ -5562,7 +5562,7 @@ sendNotif = function(title, text, dur, accentOverride)
                     end)
                     tlHitbox.MouseEnter:Connect(function()
                         quickTween(qaCapsule, 0.15,
-                            { BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255)2 or C.accent, Size = UDim2.fromOffset(30, 28), Position = UDim2
+                            { BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255), Size = UDim2.fromOffset(30, 28), Position = UDim2
                             .new(0, 35, 0.5, -14) })
                         quickTween(qaCapsuleCorner, 0.15, { CornerRadius = UDim.new(0, 8) })
                         quickTween(qaTlIcon, 0.15, { TextSize = 13 })
