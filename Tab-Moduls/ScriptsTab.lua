@@ -906,7 +906,7 @@ movePage = Instance.new("Frame", sSubArea)
                         sTrack.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38); corner(sTrack, 3); stroke(sTrack, 1, C.accent2, 0.5)
                         sTrack.ZIndex = 12
                         local sFill = Instance.new("Frame", sTrack)
-                        sFill.Size = UDim2.new((tfSpeed - sMin) / (sMax - sMin), 0, 1, 0); sFill.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255)2; corner(sFill, 3); sFill.ZIndex = 13
+                        sFill.Size = UDim2.new((tfSpeed - sMin) / (sMax - sMin), 0, 1, 0); sFill.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255); corner(sFill, 3); sFill.ZIndex = 13
                         local sKnob = Instance.new("Frame", sTrack)
                         sKnob.Size = UDim2.new(0, 12, 0, 12); sKnob.Position = UDim2.new((tfSpeed - sMin) / (sMax - sMin), -6, 0.5, -6)
                         sKnob.BackgroundColor3 = _C3_WHITE; corner(sKnob, 99); local sKnobS = stroke(sKnob, 1.5, C.accent2, 0); sKnob.ZIndex = 14
