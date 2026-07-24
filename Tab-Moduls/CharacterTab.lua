@@ -43,6 +43,27 @@ function CharacterTab.Init(ctx)
         return p, c
     end
     local C = ctx.C or {
+
+    local _C3_DEF_BG   = Color3.fromRGB(18, 18, 20)
+    local _C3_DEF_BG2  = Color3.fromRGB(26, 26, 28)
+    local _C3_DEF_BG3  = Color3.fromRGB(34, 34, 38)
+    local _C3_DEF_ACC  = Color3.fromRGB(0, 170, 255)
+    local _C3_DEF_SUB  = Color3.fromRGB(130, 135, 145)
+    local _C3_DEF_TXT  = Color3.fromRGB(255, 255, 255)
+    
+    if type(C) == "table" then
+        setmetatable(C, {
+            __index = function(_, k)
+                if k == "bg" or k == "bg1" or k == "panelBg" then return _C3_DEF_BG end
+                if k == "bg2" or k == "panelHdr" then return _C3_DEF_BG2 end
+                if k == "bg3" or k == "bg4" then return _C3_DEF_BG3 end
+                if k == "accent" or k == "accent2" then return _C3_DEF_ACC end
+                if k == "sub" or k == "sub2" then return _C3_DEF_SUB end
+                if k == "text" or k == "white" then return _C3_DEF_TXT end
+                return Color3.fromRGB(120, 120, 130)
+            end
+        })
+    end
         accent = Color3.fromRGB(0, 170, 255),
         accent2 = Color3.fromRGB(0, 200, 255),
         sub = Color3.fromRGB(150, 150, 150),
@@ -150,7 +171,7 @@ function CharacterTab.Init(ctx)
     local _TL_VP = ctx._TL_VP
 
                 local p, c = makePanel("Character", C.accent)
-                p.BackgroundColor3 = C.panelBg
+                p.BackgroundColor3 = C.panelBg or Color3.fromRGB(18, 18, 20)
                 p.BackgroundTransparency = 0
                 local _eg = p:FindFirstChildOfClass("UIGradient"); if _eg then _eg:Destroy() end
                 local PAD = 16
@@ -159,7 +180,7 @@ function CharacterTab.Init(ctx)
                 local function divider(yPos)
                     local d = Instance.new("Frame", c)
                     d.Size = UDim2.new(1, -PAD * 2, 0, 1); d.Position = UDim2.new(0, PAD, 0, yPos)
-                    d.BackgroundColor3 = C.bg3 or _C3_BG4
+                    d.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG4
                     d.BackgroundTransparency = 0.2; d.BorderSizePixel = 0
                 end
                 local function sectionLbl(yPos, txt)
@@ -231,7 +252,7 @@ function CharacterTab.Init(ctx)
                     row.rstBtn = Instance.new("TextButton", row.card)
                     row.rstBtn.Size = UDim2.new(0, 30, 0, 22)
                     row.rstBtn.Position = UDim2.new(1, -136, 0, 5)
-                    row.rstBtn.BackgroundColor3 = C.bg3
+                    row.rstBtn.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38)
                     row.rstBtn.BackgroundTransparency = 0.2
                     row.rstBtn.Text = "R"
                     row.rstBtn.Font = Enum.Font.GothamBold
@@ -245,13 +266,13 @@ function CharacterTab.Init(ctx)
                         twP(row.rstBtn, 0.1, { BackgroundColor3 = liveCol(), BackgroundTransparency = 0.6 })
                     end)
                     row.rstBtn.MouseLeave:Connect(function()
-                        twP(row.rstBtn, 0.1, { BackgroundColor3 = C.bg3, BackgroundTransparency = 0.2 })
+                        twP(row.rstBtn, 0.1, { BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38), BackgroundTransparency = 0.2 })
                     end)
 
                     row.track = Instance.new("Frame", row.card)
                     row.track.Size = UDim2.new(1, -28, 0, 4)
                     row.track.Position = UDim2.new(0, 14, 1, -14)
-                    row.track.BackgroundColor3 = C.bg3
+                    row.track.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38)
                     row.track.BackgroundTransparency = 0.4
                     row.track.ZIndex = 4
                     corner(row.track, 99)
@@ -332,7 +353,7 @@ function CharacterTab.Init(ctx)
                     row.togTrack = Instance.new("Frame", row.card)
                     row.togTrack.Size = UDim2.new(0, 32, 0, 18)
                     row.togTrack.Position = UDim2.new(1, -44, 0, 11)
-                    row.togTrack.BackgroundColor3 = C.bg3 or _C3_BG3
+                    row.togTrack.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG3
                     row.togTrack.BackgroundTransparency = 0.2
                     row.togTrack.BorderSizePixel = 0
                     row.togTrack.ZIndex = 6
@@ -361,7 +382,7 @@ function CharacterTab.Init(ctx)
                                 _SvcDeb:AddItem(sound, 2)
                             end)
                         else
-                            twP(row.togTrack, 0.15, { BackgroundColor3 = C.bg3 or _C3_BG3, BackgroundTransparency = 0.2 })
+                            twP(row.togTrack, 0.15, { BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG3, BackgroundTransparency = 0.2 })
                             tw(row.togKnob, 0.15, { BackgroundColor3 = _C3_SUB2, Position = UDim2.new(0, 2, 0.5, -6) })
                                 :Play()
                             twP(row.cStr, 0.15, { Color = C.bg3 or _C3_BG3, Transparency = 0.3 })
@@ -424,7 +445,7 @@ function CharacterTab.Init(ctx)
                             pcall(function() row.nameLbl.TextColor3 = C.text end)
                             pcall(function() row.subLbl.TextColor3 = C.sub end)
                             pcall(function() row.rstBtn.TextColor3 = C.sub end)
-                            pcall(function() row.rstBtn.BackgroundColor3 = C.bg3 end)
+                            pcall(function() row.rstBtn.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) end)
                             if togState then
                                 pcall(function() row.togTrack.BackgroundColor3 = ac end)
                                 pcall(function() row.cStr.Color = ac end)
@@ -482,11 +503,11 @@ function CharacterTab.Init(ctx)
 
                     local togTrack = Instance.new("Frame", card)
                     togTrack.Size = UDim2.new(0, 32, 0, 18); togTrack.Position = UDim2.new(1, -46, 0.5, -9)
-                    togTrack.BackgroundColor3 = C.bg3; togTrack.BackgroundTransparency = 0.1; corner(togTrack, 99)
+                    togTrack.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38); togTrack.BackgroundTransparency = 0.1; corner(togTrack, 99)
 
                     local togKnob = Instance.new("Frame", togTrack)
                     togKnob.Size = UDim2.new(0, 12, 0, 12); togKnob.Position = UDim2.new(0, 2, 0.5, -6)
-                    togKnob.BackgroundColor3 = C.sub; togKnob.BackgroundTransparency = 0; corner(togKnob, 99)
+                    togKnob.BackgroundColor3 = C.sub or Color3.fromRGB(130, 135, 145); togKnob.BackgroundTransparency = 0; corner(togKnob, 99)
 
                     local togState = false
                     local function setToggle(on)
@@ -501,8 +522,8 @@ function CharacterTab.Init(ctx)
                                 game:GetService("Debris"):AddItem(sound, 1)
                             end)
                         else
-                            twP(togTrack, 0.15, { BackgroundColor3 = C.bg3, BackgroundTransparency = 0.1 })
-                            tw(togKnob, 0.15, { BackgroundColor3 = C.sub, Position = UDim2.new(0, 2, 0.5, -6) }):Play()
+                            twP(togTrack, 0.15, { BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38), BackgroundTransparency = 0.1 })
+                            tw(togKnob, 0.15, { BackgroundColor3 = C.sub or Color3.fromRGB(130, 135, 145), Position = UDim2.new(0, 2, 0.5, -6) }):Play()
                         end
                         if onToggle then onToggle(on) end
                     end
@@ -538,7 +559,7 @@ function CharacterTab.Init(ctx)
                                 pcall(function() togTrack.BackgroundColor3 = ac end)
                                 pcall(function() cStr.Color = ac end)
                             else
-                                pcall(function() togTrack.BackgroundColor3 = C.bg3 end)
+                                pcall(function() togTrack.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) end)
                             end
 
                             pcall(function()
@@ -1338,10 +1359,10 @@ local function RunCustomAnimation(Char)
                         end)
                         btn.MouseEnter:Connect(function()
                             _sc._playHoverSound()
-                            twP(chip, 0.1, { BackgroundColor3 = C.bg3 or _C3_BG4 })
+                            twP(chip, 0.1, { BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG4 })
                         end)
                         btn.MouseLeave:Connect(function()
-                            twP(chip, 0.1, { BackgroundColor3 = C.bg2 or _C3_BG2 })
+                            twP(chip, 0.1, { BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28) or _C3_BG2 })
                         end)
                     end
                     CY = CY + QA_H + 26 + GAP
@@ -1781,7 +1802,7 @@ local function RunCustomAnimation(Char)
                     local movePill = Instance.new("Frame", c)
                     movePill.Size = UDim2.new(1, -PAD * 2, 0, movePillH)
                     movePill.Position = UDim2.new(0, PAD, 0, CY)
-                    movePill.BackgroundColor3 = C.bg2 or _C3_BG2
+                    movePill.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28) or _C3_BG2
                     movePill.BackgroundTransparency = 0
                     movePill.BorderSizePixel = 0
                     corner(movePill, 10)
@@ -1819,7 +1840,7 @@ local function RunCustomAnimation(Char)
                     local moveToggleTrack = Instance.new("Frame", movePill)
                     moveToggleTrack.Size = UDim2.new(0, 32, 0, 18)
                     moveToggleTrack.Position = UDim2.new(1, -64, 0.5, -9)
-                    moveToggleTrack.BackgroundColor3 = C.bg3 or _C3_BG3
+                    moveToggleTrack.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG3
                     moveToggleTrack.BackgroundTransparency = 0.15
                     moveToggleTrack.BorderSizePixel = 0
                     corner(moveToggleTrack, 99)
@@ -1827,7 +1848,7 @@ local function RunCustomAnimation(Char)
                     local moveToggleKnob = Instance.new("Frame", moveToggleTrack)
                     moveToggleKnob.Size = UDim2.new(0, 12, 0, 12)
                     moveToggleKnob.Position = UDim2.new(0, 2, 0.5, -6)
-                    moveToggleKnob.BackgroundColor3 = C.sub or _C3_SUB
+                    moveToggleKnob.BackgroundColor3 = C.sub or Color3.fromRGB(130, 135, 145) or _C3_SUB
                     moveToggleKnob.BorderSizePixel = 0
                     corner(moveToggleKnob, 99)
 
@@ -1851,7 +1872,7 @@ local function RunCustomAnimation(Char)
                     local moveDropOuter = Instance.new("Frame", c)
                     moveDropOuter.Size = UDim2.new(1, -PAD * 2, 0, 0)
                     moveDropOuter.Position = UDim2.new(0, PAD, 0, CY + movePillH + moveDropGap)
-                    moveDropOuter.BackgroundColor3 = C.bg2 or _C3_BG2
+                    moveDropOuter.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28) or _C3_BG2
                     moveDropOuter.BackgroundTransparency = 0.06
                     moveDropOuter.BorderSizePixel = 0
                     moveDropOuter.ClipsDescendants = true
@@ -1870,7 +1891,7 @@ local function RunCustomAnimation(Char)
                     local jollyBtn = Instance.new("TextButton", moveDropList)
                     jollyBtn.Size = UDim2.new(1, 0, 0, 32)
                     jollyBtn.Position = UDim2.new(0, 0, 0, 0)
-                    jollyBtn.BackgroundColor3 = C.bg3 or _C3_BG3
+                    jollyBtn.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG3
                     jollyBtn.BackgroundTransparency = 0.82
                     jollyBtn.BorderSizePixel = 0
                     jollyBtn.Text = "Jolly"
@@ -1884,7 +1905,7 @@ local function RunCustomAnimation(Char)
                     local jollyDot = Instance.new("Frame", jollyBtn)
                     jollyDot.Size = UDim2.new(0, 6, 0, 6)
                     jollyDot.Position = UDim2.new(1, -14, 0.5, -3)
-                    jollyDot.BackgroundColor3 = C.accent or Color3.new(1, 1, 1)
+                    jollyDot.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255) or Color3.new(1, 1, 1)
                     jollyDot.BorderSizePixel = 0
                     jollyDot.Visible = false
                     jollyDot.ZIndex = 32
@@ -1893,7 +1914,7 @@ local function RunCustomAnimation(Char)
                     local cartoonBtn = Instance.new("TextButton", moveDropList)
                     cartoonBtn.Size = UDim2.new(1, 0, 0, 32)
                     cartoonBtn.Position = UDim2.new(0, 0, 0, 36)
-                    cartoonBtn.BackgroundColor3 = C.bg3 or _C3_BG3
+                    cartoonBtn.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG3
                     cartoonBtn.BackgroundTransparency = 0.82
                     cartoonBtn.BorderSizePixel = 0
                     cartoonBtn.Text = "Cartoon"
@@ -1907,7 +1928,7 @@ local function RunCustomAnimation(Char)
                     local cartoonDot = Instance.new("Frame", cartoonBtn)
                     cartoonDot.Size = UDim2.new(0, 6, 0, 6)
                     cartoonDot.Position = UDim2.new(1, -14, 0.5, -3)
-                    cartoonDot.BackgroundColor3 = C.accent or Color3.new(1, 1, 1)
+                    cartoonDot.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255) or Color3.new(1, 1, 1)
                     cartoonDot.BorderSizePixel = 0
                     cartoonDot.Visible = false
                     cartoonDot.ZIndex = 32
@@ -1916,7 +1937,7 @@ local function RunCustomAnimation(Char)
                     local mysteriousBtn = Instance.new("TextButton", moveDropList)
                     mysteriousBtn.Size = UDim2.new(1, 0, 0, 32)
                     mysteriousBtn.Position = UDim2.new(0, 0, 0, 72)
-                    mysteriousBtn.BackgroundColor3 = C.bg3 or _C3_BG3
+                    mysteriousBtn.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG3
                     mysteriousBtn.BackgroundTransparency = 0.82
                     mysteriousBtn.BorderSizePixel = 0
                     mysteriousBtn.Text = "Mysterious"
@@ -1930,7 +1951,7 @@ local function RunCustomAnimation(Char)
                     local mysteriousDot = Instance.new("Frame", mysteriousBtn)
                     mysteriousDot.Size = UDim2.new(0, 6, 0, 6)
                     mysteriousDot.Position = UDim2.new(1, -14, 0.5, -3)
-                    mysteriousDot.BackgroundColor3 = C.accent or Color3.new(1, 1, 1)
+                    mysteriousDot.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255) or Color3.new(1, 1, 1)
                     mysteriousDot.BorderSizePixel = 0
                     mysteriousDot.Visible = false
                     mysteriousDot.ZIndex = 32
@@ -1939,7 +1960,7 @@ local function RunCustomAnimation(Char)
                     local chibiBtn = Instance.new("TextButton", moveDropList)
                     chibiBtn.Size = UDim2.new(1, 0, 0, 32)
                     chibiBtn.Position = UDim2.new(0, 0, 0, 108)
-                    chibiBtn.BackgroundColor3 = C.bg3 or _C3_BG3
+                    chibiBtn.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG3
                     chibiBtn.BackgroundTransparency = 0.82
                     chibiBtn.BorderSizePixel = 0
                     chibiBtn.Text = "Chibi"
@@ -1953,7 +1974,7 @@ local function RunCustomAnimation(Char)
                     local chibiDot = Instance.new("Frame", chibiBtn)
                     chibiDot.Size = UDim2.new(0, 6, 0, 6)
                     chibiDot.Position = UDim2.new(1, -14, 0.5, -3)
-                    chibiDot.BackgroundColor3 = C.accent or Color3.new(1, 1, 1)
+                    chibiDot.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255) or Color3.new(1, 1, 1)
                     chibiDot.BorderSizePixel = 0
                     chibiDot.Visible = false
                     chibiDot.ZIndex = 32
@@ -1962,7 +1983,7 @@ local function RunCustomAnimation(Char)
                     local nonchalantBtn = Instance.new("TextButton", moveDropList)
                     nonchalantBtn.Size = UDim2.new(1, 0, 0, 32)
                     nonchalantBtn.Position = UDim2.new(0, 0, 0, 144)
-                    nonchalantBtn.BackgroundColor3 = C.bg3 or _C3_BG3
+                    nonchalantBtn.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG3
                     nonchalantBtn.BackgroundTransparency = 0.82
                     nonchalantBtn.BorderSizePixel = 0
                     nonchalantBtn.Text = "Nonchalant"
@@ -1976,7 +1997,7 @@ local function RunCustomAnimation(Char)
                     local nonchalantDot = Instance.new("Frame", nonchalantBtn)
                     nonchalantDot.Size = UDim2.new(0, 6, 0, 6)
                     nonchalantDot.Position = UDim2.new(1, -14, 0.5, -3)
-                    nonchalantDot.BackgroundColor3 = C.accent or Color3.new(1, 1, 1)
+                    nonchalantDot.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255) or Color3.new(1, 1, 1)
                     nonchalantDot.BorderSizePixel = 0
                     nonchalantDot.Visible = false
                     nonchalantDot.ZIndex = 32
@@ -2014,14 +2035,14 @@ local function RunCustomAnimation(Char)
                             (C.text or Color3.new(1, 1, 1)) })
                         if moveAnimEnabled and MOVE_ANIM_PACKS[moveAnimSelection] then
                             twP(moveToggleTrack, 0.15,
-                                { BackgroundColor3 = C.accent or Color3.new(1, 1, 1), BackgroundTransparency = 0.45 })
+                                { BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255) or Color3.new(1, 1, 1), BackgroundTransparency = 0.45 })
                             tw(moveToggleKnob, 0.15,
                                 { BackgroundColor3 = Color3.new(1, 1, 1), Position = UDim2.new(1, -14, 0.5, -6) }):Play()
                         else
                             twP(moveToggleTrack, 0.15,
-                                { BackgroundColor3 = C.bg3 or _C3_BG3, BackgroundTransparency = 0.15 })
+                                { BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG3, BackgroundTransparency = 0.15 })
                             tw(moveToggleKnob, 0.15,
-                                { BackgroundColor3 = C.sub or _C3_SUB, Position = UDim2.new(0, 2, 0.5, -6) }):Play()
+                                { BackgroundColor3 = C.sub or Color3.fromRGB(130, 135, 145) or _C3_SUB, Position = UDim2.new(0, 2, 0.5, -6) }):Play()
                         end
                     end
 
@@ -2058,10 +2079,10 @@ local function RunCustomAnimation(Char)
 
                     movePillBtn.MouseEnter:Connect(function()
                         _sc._playHoverSound()
-                        twP(movePill, 0.1, { BackgroundColor3 = C.bg3 or _C3_BG3 })
+                        twP(movePill, 0.1, { BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG3 })
                     end)
                     movePillBtn.MouseLeave:Connect(function()
-                        twP(movePill, 0.1, { BackgroundColor3 = C.bg2 or _C3_BG2 })
+                        twP(movePill, 0.1, { BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28) or _C3_BG2 })
                     end)
                     movePillBtn.MouseButton1Click:Connect(function()
                         toggleMoveDropdown()
