@@ -1259,10 +1259,23 @@ task.spawn(function()
             return obj
         end
         local function corner(parent, r)
-            local c = Instance.new("UICorner")
+            if not parent then return nil end
+            local c = parent:FindFirstChildOfClass("UICorner") or Instance.new("UICorner")
             c.CornerRadius = UDim.new(0, r or 8)
             c.Parent = parent
             return c
+        end
+        local function stroke(parent, thick, col, trans)
+            if not parent then return nil end
+            local s = parent:FindFirstChildOfClass("UIStroke") or Instance.new("UIStroke")
+            s.Thickness = thick or 1
+            s.Color = col or Color3.fromRGB(255, 255, 255)
+            s.Transparency = trans or 0
+            s.Parent = parent
+            return s
+        end
+        local function _makeDummyStroke(parent, thick, col, trans)
+            return stroke(parent, thick, col, trans)
         end
         pcall(function()
             if getgenv then _genv.SmartBarLoaded = true end
