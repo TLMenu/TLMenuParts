@@ -45,6 +45,27 @@ function ActionsTab.Init(ctx)
         return p, c
     end
     local C = ctx.C or {
+
+    local _C3_DEF_BG   = Color3.fromRGB(18, 18, 20)
+    local _C3_DEF_BG2  = Color3.fromRGB(26, 26, 28)
+    local _C3_DEF_BG3  = Color3.fromRGB(34, 34, 38)
+    local _C3_DEF_ACC  = Color3.fromRGB(0, 170, 255)
+    local _C3_DEF_SUB  = Color3.fromRGB(130, 135, 145)
+    local _C3_DEF_TXT  = Color3.fromRGB(255, 255, 255)
+    
+    if type(C) == "table" then
+        setmetatable(C, {
+            __index = function(_, k)
+                if k == "bg" or k == "bg1" or k == "panelBg" then return _C3_DEF_BG end
+                if k == "bg2" or k == "panelHdr" then return _C3_DEF_BG2 end
+                if k == "bg3" or k == "bg4" then return _C3_DEF_BG3 end
+                if k == "accent" or k == "accent2" then return _C3_DEF_ACC end
+                if k == "sub" or k == "sub2" then return _C3_DEF_SUB end
+                if k == "text" or k == "white" then return _C3_DEF_TXT end
+                return Color3.fromRGB(120, 120, 130)
+            end
+        })
+    end
         accent = Color3.fromRGB(0, 170, 255),
         accent2 = Color3.fromRGB(0, 200, 255),
         sub = Color3.fromRGB(150, 150, 150),
@@ -158,7 +179,7 @@ function ActionsTab.Init(ctx)
                     local DD_ITEM_H = 34; local DD_MAX = 5
                     local ddFrame = Instance.new("Frame", ScreenGui)
                     ddFrame.Name = "FollowDropdown"
-                    ddFrame.BackgroundColor3 = C.bg2; ddFrame.BackgroundTransparency = 0.06
+                    ddFrame.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28); ddFrame.BackgroundTransparency = 0.06
                     ddFrame.BorderSizePixel = 0; ddFrame.ZIndex = 11000; ddFrame.Visible = false
                     pcall(function()
                         local pcard = ddFrame.Parent
@@ -180,7 +201,7 @@ function ActionsTab.Init(ctx)
                     _ddBgUpdate(); ddBg.Rotation = 135
                                         _panelColorHooks[#_panelColorHooks + 1] = function()
                         pcall(_ddBgUpdate)
-                        pcall(function() ddFrame.BackgroundColor3 = C.bg2 end)
+                        pcall(function() ddFrame.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28) end)
                     end
                     local ddScroll = Instance.new("ScrollingFrame", ddFrame)
                     ddScroll.Size = UDim2.new(1, 0, 1, 0); ddScroll.BackgroundTransparency = 1
@@ -240,12 +261,12 @@ function ActionsTab.Init(ctx)
                         local selectedFollowTarget = getTarget()
                         for _, pl in ipairs(plrs) do
                             local row = Instance.new("Frame", ddScroll)
-                            row.Size = UDim2.new(1, -8, 0, DD_ITEM_H); row.BackgroundColor3 = C.bg3
+                            row.Size = UDim2.new(1, -8, 0, DD_ITEM_H); row.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38)
                             row.BackgroundTransparency = 0.85; row.BorderSizePixel = 0; row.ZIndex = 11002
                             corner(row, 10)
                             local avatarClip = Instance.new("Frame", row)
                             avatarClip.Size = UDim2.new(0, 24, 0, 24); avatarClip.Position = UDim2.new(0, 5, 0.5, -12)
-                            avatarClip.BackgroundColor3 = C.bg3; avatarClip.BackgroundTransparency = 0.4
+                            avatarClip.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38); avatarClip.BackgroundTransparency = 0.4
                             avatarClip.BorderSizePixel = 0; avatarClip.ZIndex = 11003; avatarClip.ClipsDescendants = true
                             corner(avatarClip, 99)
                             local avatarImg = Instance.new("ImageLabel", avatarClip)
@@ -270,7 +291,7 @@ function ActionsTab.Init(ctx)
                             if selectedFollowTarget == pl then
                                 local dot = Instance.new("Frame", row)
                                 dot.Size = UDim2.new(0, 5, 0, 5); dot.Position = UDim2.new(1, -12, 0.5, -2)
-                                dot.BackgroundColor3 = C.accent; dot.BorderSizePixel = 0; corner(dot, 99); dot.ZIndex = 11003
+                                dot.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255); dot.BorderSizePixel = 0; corner(dot, 99); dot.ZIndex = 11003
                             end
                             local rowBtn = Instance.new("TextButton", row)
                             rowBtn.Size = UDim2.new(1, 0, 1, 0); rowBtn.BackgroundTransparency = 1
@@ -393,7 +414,7 @@ function ActionsTab.Init(ctx)
                     local infoDot = Instance.new("Frame", infoCard)
                     infoDot.Size = UDim2.new(0, 3, 0, 32); infoDot.Visible = false; infoDot.Position = UDim2.new(0, 0,
                         0.5, -16)
-                    infoDot.BackgroundColor3 = C.accent; infoDot.BackgroundTransparency = 0.4
+                    infoDot.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255); infoDot.BackgroundTransparency = 0.4
                     infoDot.BorderSizePixel = 0; corner(infoDot, 99)
                     local infoIcon = Instance.new("TextLabel", infoCard)
                     infoIcon.Size = UDim2.new(0, 36, 1, 0); infoIcon.Position = UDim2.new(0, 10, 0, 0)
@@ -434,7 +455,7 @@ function ActionsTab.Init(ctx)
                     local pickDot = Instance.new("Frame", pickRow)
                     pickDot.Size = UDim2.new(0, 3, 0, 26); pickDot.Visible = false; pickDot.Position = UDim2.new(0, 0,
                         0.5, -13)
-                    pickDot.BackgroundColor3 = C.accent; pickDot.BackgroundTransparency = 0.4
+                    pickDot.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255); pickDot.BackgroundTransparency = 0.4
                     pickDot.BorderSizePixel = 0; corner(pickDot, 99)
                     local pickLbl = Instance.new("TextLabel", pickRow)
                     pickLbl.Size = UDim2.new(0, 60, 1, 0); pickLbl.Position = UDim2.new(0, 16, 0, 0)
@@ -443,7 +464,7 @@ function ActionsTab.Init(ctx)
                     pickLbl.TextColor3 = C.text; pickLbl.TextXAlignment = Enum.TextXAlignment.Left
                     playerPill = Instance.new("Frame", pickRow)
                     playerPill.Size = UDim2.new(0, 138, 0, 28); playerPill.Position = UDim2.new(0, 72, 0.5, -14)
-                    playerPill.BackgroundColor3 = C.bg3; playerPill.BackgroundTransparency = 0.08
+                    playerPill.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38); playerPill.BackgroundTransparency = 0.08
                     playerPill.BorderSizePixel = 0
                     corner(playerPill, 11)
                     local playerPillStr = _makeDummyStroke(playerPill)
@@ -451,7 +472,7 @@ function ActionsTab.Init(ctx)
                     local playerPillAvatarClip = Instance.new("Frame", playerPill)
                     playerPillAvatarClip.Size = UDim2.new(0, 20, 0, 20); playerPillAvatarClip.Position = UDim2.new(0, 5,
                         0.5, -10)
-                    playerPillAvatarClip.BackgroundColor3 = C.bg3; playerPillAvatarClip.BackgroundTransparency = 0.4
+                    playerPillAvatarClip.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38); playerPillAvatarClip.BackgroundTransparency = 0.4
                     playerPillAvatarClip.BorderSizePixel = 0; playerPillAvatarClip.ZIndex = 3; playerPillAvatarClip.ClipsDescendants = true
                     corner(playerPillAvatarClip, 99)
                     playerPillAvatar = Instance.new("ImageLabel", playerPillAvatarClip)
@@ -469,7 +490,7 @@ function ActionsTab.Init(ctx)
                     playerPillBtn.Text = ""; playerPillBtn.ZIndex = 6
                     actionPill = Instance.new("Frame", pickRow)
                     actionPill.Size = UDim2.new(0, 138, 0, 28); actionPill.Position = UDim2.new(1, -153, 0.5, -14)
-                    actionPill.BackgroundColor3 = C.bg3; actionPill.BackgroundTransparency = 0.08
+                    actionPill.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38); actionPill.BackgroundTransparency = 0.08
                     actionPill.BorderSizePixel = 0
                     corner(actionPill, 11)
                     local actionPillStr = _makeDummyStroke(actionPill)
@@ -497,7 +518,7 @@ function ActionsTab.Init(ctx)
                     local actionRowDot = Instance.new("Frame", actionRow)
                     actionRowDot.Size = UDim2.new(0, 3, 0, 26); actionRowDot.Visible = false; actionRowDot.Position =
                     UDim2.new(0, 0, 0.5, -13)
-                    actionRowDot.BackgroundColor3 = C.accent; actionRowDot.BackgroundTransparency = 0.4
+                    actionRowDot.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255); actionRowDot.BackgroundTransparency = 0.4
                     actionRowDot.BorderSizePixel = 0; corner(actionRowDot, 99)
                     local actionRowLbl = Instance.new("TextLabel", actionRow)
                     actionRowLbl.Size = UDim2.new(0, 140, 1, 0); actionRowLbl.Position = UDim2.new(0, 16, 0, 0)
@@ -550,8 +571,8 @@ function ActionsTab.Init(ctx)
                                 pickRow.BackgroundColor3 = _isImg and Color3.fromRGB(255, 255, 255) or (C.bg2 or _C3_BG2)
                                 pickRow.BackgroundTransparency = _isImg and 0.94 or 0
                             end
-                            if pickDot and pickDot.Parent then pickDot.BackgroundColor3 = C.accent end
-                            if actionRowDot and actionRowDot.Parent then actionRowDot.BackgroundColor3 = C.accent end
+                            if pickDot and pickDot.Parent then pickDot.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255) end
+                            if actionRowDot and actionRowDot.Parent then actionRowDot.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255) end
                             if actionRowLbl and actionRowLbl.Parent then actionRowLbl.TextColor3 = C.text end
                         end)
                     end
@@ -920,7 +941,7 @@ function ActionsTab.Init(ctx)
                 local actDdFrame = Instance.new("Frame", ScreenGui)
                 actDdFrame.Name = "ActionsDropdown"
                 
-                actDdFrame.BackgroundColor3 = C.panelBg or Color3.fromRGB(10, 10, 10); actDdFrame.BackgroundTransparency = 0.06
+                actDdFrame.BackgroundColor3 = C.panelBg or Color3.fromRGB(18, 18, 20) or Color3.fromRGB(10, 10, 10); actDdFrame.BackgroundTransparency = 0.06
                 actDdFrame.BorderSizePixel = 0; actDdFrame.ZIndex = 50; actDdFrame.Visible = false
                 actDdFrame.ClipsDescendants = true
                 corner(actDdFrame, 14); gradStroke(actDdFrame, 1.5, 0.22)
@@ -937,7 +958,7 @@ function ActionsTab.Init(ctx)
                 _actDdBgUpdate(); actDdBg.Rotation = 135
                                 _panelColorHooks[#_panelColorHooks + 1] = function()
                     pcall(_actDdBgUpdate)
-                    pcall(function() actDdFrame.BackgroundColor3 = C.panelBg or Color3.fromRGB(10, 10, 10) end)
+                    pcall(function() actDdFrame.BackgroundColor3 = C.panelBg or Color3.fromRGB(18, 18, 20) or Color3.fromRGB(10, 10, 10) end)
                 end
                 local actDdScroll = Instance.new("ScrollingFrame", actDdFrame)
                 actDdScroll.Size = UDim2.new(1, 0, 1, 0); actDdScroll.BackgroundTransparency = 1
@@ -965,7 +986,7 @@ function ActionsTab.Init(ctx)
                     end
                     for _, act in ipairs(ACTIONS) do
                         local row = Instance.new("Frame", actDdScroll)
-                        row.Size = UDim2.new(1, -8, 0, ACT_IH); row.BackgroundColor3 = C.bg3
+                        row.Size = UDim2.new(1, -8, 0, ACT_IH); row.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38)
                         row.BackgroundTransparency = 0.85; row.BorderSizePixel = 0; row.ZIndex = 52
                         corner(row, 10)
                         local pad = Instance.new("UIPadding", row); pad.PaddingLeft = UDim.new(0, 11)
@@ -1108,7 +1129,7 @@ function ActionsTab.Init(ctx)
                             startGhost(selectedFollowTarget); ok = true
                         end
                         if ok then
-                            statusDot.BackgroundColor3 = C.accent
+                            statusDot.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255)
                             local n = selectedFollowTarget.Name
                             statusTxt.Text = selectedAction == "bang" and (T.actions_following .. n)
                                 or selectedAction == "soh" and ("On Head: " .. n)
@@ -4208,18 +4229,18 @@ function ActionsTab.Init(ctx)
                             rowS.Transparency = 0.3
                         end)
                         
-                        pcall(function() rowD.BackgroundColor3 = C.accent end)
+                        pcall(function() rowD.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255) end)
                         pcall(function() lbl.TextColor3 = C.text end)
                         pcall(function() if not listening then descLbl.TextColor3 = C.sub or _C3_SUB end end)
                         pcall(function() if not listening then keyCardStroke.Color = C.accent2 or C.accent end end)
                         pcall(function() keyIcon.TextColor3 = C.accent2 or C.accent end)
                         pcall(function() if not listening then kl.TextColor3 = C.text end end)
-                        pcall(function() keyCard.BackgroundColor3 = C.bg3 or _C3_BG3 end)
+                        pcall(function() keyCard.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG3 end)
                     end
                 end
                 local rowD = Instance.new("Frame", row); rowD.Size = UDim2.new(0, 4, 0, 28); rowD.Visible = false; rowD.Position =
                 UDim2.new(0, 0, 0.5, -14)
-                rowD.BackgroundColor3 = C.accent or C.accent2; rowD.BackgroundTransparency = 0.3; rowD.BorderSizePixel = 0; corner(
+                rowD.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255) or C.accent2; rowD.BackgroundTransparency = 0.3; rowD.BorderSizePixel = 0; corner(
                 rowD, 99)
                 local lbl                      = Instance.new("TextLabel", row)
                 lbl.Size                       = UDim2.new(0, 160, 1, 0)
@@ -4290,7 +4311,7 @@ function ActionsTab.Init(ctx)
                         listenConn:Disconnect(); listenConn = nil
                     end
                     pulseConn = nil
-                    twP(keyCard, 0.2, { BackgroundColor3 = C.bg3 or _C3_BG3, BackgroundTransparency = 0.3 })
+                    twP(keyCard, 0.2, { BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG3, BackgroundTransparency = 0.3 })
                     twP(keyCardStroke, 0.2, { Color = C.accent2 or C.accent, Transparency = 0.7 })
                     twP(kl, 0.2, { TextColor3 = C.text })
                     kl.Text = keyName(keybinds[actionName] and keybinds[actionName].key)
@@ -4307,7 +4328,7 @@ function ActionsTab.Init(ctx)
                     kl.TextColor3 = C.accent
                     descLbl.Text = "Press any key"
                     descLbl.TextColor3 = C.accent
-                    twP(keyCard, 0.2, { BackgroundColor3 = C.accent, BackgroundTransparency = 0.15 })
+                    twP(keyCard, 0.2, { BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255), BackgroundTransparency = 0.15 })
                     twP(keyCardStroke, 0.2, { Color = C.accent, Transparency = 0.3 })
                     pulseConn = task.spawn(function()
                         while listening and _tlAlive() do
@@ -4342,7 +4363,7 @@ function ActionsTab.Init(ctx)
                 keyBtn.MouseEnter:Connect(function()
                     _sc._playHoverSound()
                     if not listening then
-                        twP(keyCard, 0.15, { BackgroundColor3 = C.accent2 or C.accent, BackgroundTransparency = 0.2 })
+                        twP(keyCard, 0.15, { BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255)2 or C.accent, BackgroundTransparency = 0.2 })
                         twP(keyCardStroke, 0.15, { Color = C.accent, Transparency = 0.4 })
                         twP(kl, 0.15, { TextColor3 = C.accent })
                         descLbl.Text = "Click to bind"
@@ -4351,7 +4372,7 @@ function ActionsTab.Init(ctx)
                 end)
                 keyBtn.MouseLeave:Connect(function()
                     if not listening then
-                        twP(keyCard, 0.15, { BackgroundColor3 = C.bg3 or _C3_BG3, BackgroundTransparency = 0.3 })
+                        twP(keyCard, 0.15, { BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG3, BackgroundTransparency = 0.3 })
                         twP(keyCardStroke, 0.15, { Color = C.accent2 or C.accent, Transparency = 0.7 })
                         twP(kl, 0.15, { TextColor3 = C.text })
                         descLbl.Text = "Press to change"
