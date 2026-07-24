@@ -43,6 +43,27 @@ function CommunicationTab.Init(ctx)
         return p, c
     end
     local C = ctx.C or {
+
+    local _C3_DEF_BG   = Color3.fromRGB(18, 18, 20)
+    local _C3_DEF_BG2  = Color3.fromRGB(26, 26, 28)
+    local _C3_DEF_BG3  = Color3.fromRGB(34, 34, 38)
+    local _C3_DEF_ACC  = Color3.fromRGB(0, 170, 255)
+    local _C3_DEF_SUB  = Color3.fromRGB(130, 135, 145)
+    local _C3_DEF_TXT  = Color3.fromRGB(255, 255, 255)
+    
+    if type(C) == "table" then
+        setmetatable(C, {
+            __index = function(_, k)
+                if k == "bg" or k == "bg1" or k == "panelBg" then return _C3_DEF_BG end
+                if k == "bg2" or k == "panelHdr" then return _C3_DEF_BG2 end
+                if k == "bg3" or k == "bg4" then return _C3_DEF_BG3 end
+                if k == "accent" or k == "accent2" then return _C3_DEF_ACC end
+                if k == "sub" or k == "sub2" then return _C3_DEF_SUB end
+                if k == "text" or k == "white" then return _C3_DEF_TXT end
+                return Color3.fromRGB(120, 120, 130)
+            end
+        })
+    end
         accent = Color3.fromRGB(0, 170, 255),
         accent2 = Color3.fromRGB(0, 200, 255),
         sub = Color3.fromRGB(150, 150, 150),
@@ -4259,7 +4280,7 @@ local function parseFieldMessage(fullText, prefixLen)
                     local loadBtn = Instance.new("TextButton", musicPage)
                     loadBtn.Size = UDim2.new(1, -16, 0, 30)
                     loadBtn.Position = UDim2.new(0, 8, 0, 34)
-                    loadBtn.BackgroundColor3 = C.accent or _C3_ACC
+                    loadBtn.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255) or _C3_ACC
                     loadBtn.BackgroundTransparency = 0.7
                     loadBtn.BorderSizePixel = 0
                     loadBtn.Font = Enum.Font.GothamBold; loadBtn.TextSize = 12
@@ -4276,7 +4297,7 @@ local function parseFieldMessage(fullText, prefixLen)
                     local copyBtn = Instance.new("TextButton", musicPage)
                     copyBtn.Size = UDim2.new(1, -16, 0, 28)
                     copyBtn.Position = UDim2.new(0, 8, 0, 68)
-                    copyBtn.BackgroundColor3 = C.bg3 or _C3_BG3
+                    copyBtn.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG3
                     copyBtn.BackgroundTransparency = 0.5
                     copyBtn.BorderSizePixel = 0
                     copyBtn.Font = Enum.Font.Gotham; copyBtn.TextSize = 11
@@ -4315,11 +4336,11 @@ local function parseFieldMessage(fullText, prefixLen)
                     
                     local slTrack = Instance.new("Frame", volCard)
                     slTrack.Size = UDim2.new(1, -24, 0, 6); slTrack.Position = UDim2.new(0, 12, 0, 34)
-                    slTrack.BackgroundColor3 = C.bg3 or _C3_BG3; slTrack.BackgroundTransparency = 0.3
+                    slTrack.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG3; slTrack.BackgroundTransparency = 0.3
                     slTrack.BorderSizePixel = 0; corner(slTrack, 99)
                     local slFill = Instance.new("Frame", slTrack)
                     slFill.Size = UDim2.new(0.80, 0, 1, 0); slFill.Position = UDim2.new(0, 0, 0, 0)
-                    slFill.BackgroundColor3 = C.accent or _C3_ACC; slFill.BackgroundTransparency = 0
+                    slFill.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255) or _C3_ACC; slFill.BackgroundTransparency = 0
                     slFill.BorderSizePixel = 0; corner(slFill, 99)
                     local slKnob = Instance.new("Frame", slTrack)
                     slKnob.Size = UDim2.new(0, 14, 0, 14); slKnob.Position = UDim2.new(0.80, -7, 0.5, -7)
