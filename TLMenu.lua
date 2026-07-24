@@ -4265,6 +4265,8 @@ sendNotif = function(title, text, dur, accentOverride)
             local p, _homeSc
             if homeMod and type(homeMod.Init) == "function" then
                 p, _homeSc = homeMod.Init(ctx)
+    local _ENUM_SORT_ORDER_LAYOUT = ctx._ENUM_SORT_ORDER_LAYOUT or (Enum and Enum.SortOrder and Enum.SortOrder.LayoutOrder) or 0
+
             end
 
             -- 2. Character Tab
