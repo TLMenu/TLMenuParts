@@ -5,6 +5,28 @@
 local ActionsTab = {}
 
 function ActionsTab.Init(ctx)
+    -- Universal Corner & Stroke Helpers
+    local function corner(parent, r)
+        if not parent then return nil end
+        local c = parent:FindFirstChildOfClass("UICorner") or Instance.new("UICorner")
+        c.CornerRadius = UDim.new(0, r or 8)
+        c.Parent = parent
+        return c
+    end
+
+    local function stroke(parent, thick, col, trans)
+        if not parent then return nil end
+        local s = parent:FindFirstChildOfClass("UIStroke") or Instance.new("UIStroke")
+        s.Thickness = thick or 1
+        s.Color = col or Color3.fromRGB(255, 255, 255)
+        s.Transparency = trans or 0
+        s.Parent = parent
+        return s
+    end
+
+    local function _makeDummyStroke(parent, thick, col, trans)
+        return stroke(parent, thick, col, trans)
+    end
     ctx = type(ctx) == "table" and ctx or {}
     local game = ctx.game or game
     local _genv = ctx._genv or (getgenv and getgenv()) or _G or {}
@@ -4365,9 +4387,6 @@ function ActionsTab.Init(ctx)
                         
             
             
-local _ok_Settings, _err_Settings = pcall(function()
-
-    return p, c
-end
+return p, c
 
 return ActionsTab
