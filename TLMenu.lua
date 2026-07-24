@@ -4519,7 +4519,7 @@ sendNotif = function(title, text, dur, accentOverride)
             if catBtns and #catBtns > 0 then
                 switchCat(catBtns[1].id)
             end
-            end); if not _ok_Settings then warn("[TL] Settings-IIFE crashed: " .. tostring(_err_Settings)) end
+            end)
             
             
             function getNearestPlayer()
