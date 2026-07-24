@@ -4361,7 +4361,7 @@ function ActionsTab.Init(ctx)
                 keyBtn.MouseEnter:Connect(function()
                     _sc._playHoverSound()
                     if not listening then
-                        twP(keyCard, 0.15, { BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255)2 or C.accent, BackgroundTransparency = 0.2 })
+                        twP(keyCard, 0.15, { BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255), BackgroundTransparency = 0.2 })
                         twP(keyCardStroke, 0.15, { Color = C.accent, Transparency = 0.4 })
                         twP(kl, 0.15, { TextColor3 = C.accent })
                         descLbl.Text = "Click to bind"
