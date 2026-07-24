@@ -5,6 +5,8 @@
 local ScriptsTab = {}
 
 function ScriptsTab.Init(ctx)
+    local _ENUM_SORT_ORDER_LAYOUT = ctx._ENUM_SORT_ORDER_LAYOUT or (Enum and Enum.SortOrder and Enum.SortOrder.LayoutOrder) or 0
+
     -- Universal Corner & Stroke Helpers
     local function corner(parent, r)
         if not parent then return nil end
@@ -229,7 +231,7 @@ function ScriptsTab.Init(ctx)
                 trollPage.BackgroundTransparency = 1; trollPage.BorderSizePixel = 0
                 trollPage.Visible                = false
                 trollLayout                      = Instance.new("UIListLayout", trollPage)
-                trollLayout.SortOrder            = _ENUM_SORT_ORDER_LAYOUT
+                trollLayout.SortOrder            = _ENUM_SORT_ORDER_LAYOUT or (Enum and Enum.SortOrder and Enum.SortOrder.LayoutOrder) or 0
                 trollLayout.FillDirection        = Enum.FillDirection.Vertical
                 trollLayout.Padding              = UDim.new(0, 6)
                 trollLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
@@ -1025,7 +1027,7 @@ visualPage = Instance.new("Frame", sSubArea)
                     espDdScroll.ElasticBehavior            = Enum.ElasticBehavior.Never
                     espDdScroll.ZIndex                     = 21
                     espDdList                              = Instance.new("UIListLayout", espDdScroll)
-                    espDdList.SortOrder                    = _ENUM_SORT_ORDER_LAYOUT
+                    espDdList.SortOrder                    = _ENUM_SORT_ORDER_LAYOUT or (Enum and Enum.SortOrder and Enum.SortOrder.LayoutOrder) or 0
                     espDdList.Padding                      = UDim.new(0, 2)
                     ddPad                                  = Instance.new("UIPadding", espDdScroll)
                     ddPad.PaddingLeft                      = UDim.new(0, 4); ddPad.PaddingRight = UDim.new(0, 4)
@@ -1250,7 +1252,7 @@ visualPage = Instance.new("Frame", sSubArea)
                 _sc.sonstigePage.Visible                = false
                 
                 _sc.miscLayout                          = Instance.new("UIListLayout", _sc.sonstigePage)
-                _sc.miscLayout.SortOrder                = _ENUM_SORT_ORDER_LAYOUT
+                _sc.miscLayout.SortOrder                = _ENUM_SORT_ORDER_LAYOUT or (Enum and Enum.SortOrder and Enum.SortOrder.LayoutOrder) or 0
                 _sc.miscLayout.FillDirection            = Enum.FillDirection.Vertical
                 _sc.miscLayout.Padding                  = UDim.new(0, 0)
 
@@ -1657,7 +1659,7 @@ visualPage = Instance.new("Frame", sSubArea)
                 combatPage.ClipsDescendants       = true
 
                 combatLayout                      = Instance.new("UIListLayout", combatPage)
-                combatLayout.SortOrder            = _ENUM_SORT_ORDER_LAYOUT
+                combatLayout.SortOrder            = _ENUM_SORT_ORDER_LAYOUT or (Enum and Enum.SortOrder and Enum.SortOrder.LayoutOrder) or 0
                 combatLayout.FillDirection        = Enum.FillDirection.Vertical
                 combatLayout.Padding              = UDim.new(0, 0)
                 combatLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
