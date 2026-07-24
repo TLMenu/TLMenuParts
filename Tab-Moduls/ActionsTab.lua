@@ -5,6 +5,8 @@
 local ActionsTab = {}
 
 function ActionsTab.Init(ctx)
+    local _ENUM_SORT_ORDER_LAYOUT = ctx._ENUM_SORT_ORDER_LAYOUT or (Enum and Enum.SortOrder and Enum.SortOrder.LayoutOrder) or 0
+
     -- Universal Corner & Stroke Helpers
     local function corner(parent, r)
         if not parent then return nil end
@@ -187,7 +189,7 @@ function ActionsTab.Init(ctx)
                     ddScroll.ScrollingDirection = Enum.ScrollingDirection.Y
                     ddScroll.CanvasSize = UDim2.new(0, 0, 0, 0); ddScroll.ZIndex = 11001
                     local ddList = Instance.new("UIListLayout", ddScroll)
-                    ddList.SortOrder = _ENUM_SORT_ORDER_LAYOUT; ddList.Padding = UDim.new(0, 2)
+                    ddList.SortOrder = _ENUM_SORT_ORDER_LAYOUT or (Enum and Enum.SortOrder and Enum.SortOrder.LayoutOrder) or 0; ddList.Padding = UDim.new(0, 2)
                     local function positionDropdown(targetH)
                         local abs = playerPill.AbsolutePosition; local absSize = playerPill.AbsoluteSize
                         local screenH = ScreenGui.AbsoluteSize.Y
@@ -944,7 +946,7 @@ function ActionsTab.Init(ctx)
                 actDdScroll.ScrollingDirection = Enum.ScrollingDirection.Y
                 actDdScroll.CanvasSize = UDim2.new(0, 0, 0, 0); actDdScroll.ZIndex = 51
                 local actDdList = Instance.new("UIListLayout", actDdScroll)
-                actDdList.SortOrder = _ENUM_SORT_ORDER_LAYOUT; actDdList.Padding = UDim.new(0, 2)
+                actDdList.SortOrder = _ENUM_SORT_ORDER_LAYOUT or (Enum and Enum.SortOrder and Enum.SortOrder.LayoutOrder) or 0; actDdList.Padding = UDim.new(0, 2)
                 local function posActDd()
                     local abs = actionPill.AbsolutePosition; local absS = actionPill.AbsoluteSize
                     actDdFrame.Position = UDim2.new(0, abs.X, 0, abs.Y + absS.Y + 4)
