@@ -1900,7 +1900,7 @@ visualPage = Instance.new("Frame", sSubArea)
                         end
                     end
                 end
-                ; (function() 
+                 
                     local _S_GAP = 8
                     local _S_H = 80
                     local _SCATS = {
@@ -2328,7 +2328,7 @@ _TL_state.actions = {}
                 { key = "suckit",      label = "Suck It",      col = Color3.fromRGB(255, 100, 180) },
                 { key = "ghost",       label = "Ghost",        col = Color3.fromRGB(160, 160, 255) },
             }
-            ; (function()
+            
 
     return p, c
 end
