@@ -1995,7 +1995,7 @@ visualPage = Instance.new("Frame", sSubArea)
                         end
                     end
                     pcall(function() _sc.scriptsPanel.Size = UDim2.new(0, PANEL_W, 0, _sc.baseH) end)
-                end)()
+                end)
             
             _act_following, _act_followTarget, _act_followRSConn = false, nil,
                 nil                                                    
