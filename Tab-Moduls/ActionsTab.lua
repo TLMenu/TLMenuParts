@@ -4093,7 +4093,6 @@ function ActionsTab.Init(ctx)
                         rawset(_genv, "_TL_stopShoulderSit", stopShoulderSit)
                     end
                 end
-            end
             end 
             
             do
