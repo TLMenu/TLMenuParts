@@ -116,8 +116,6 @@ function PlayerlistTab.Init(ctx)
             end)
         end)
     end
-        end)
-    end
 
     local game = ctx.game or game
     local _genv = ctx._genv or getgenv()
