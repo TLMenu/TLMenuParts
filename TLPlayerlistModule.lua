@@ -276,6 +276,7 @@ function TLPlayerlistModule:Build(cfg)
     local rowCache                    = {}
     local espHighlights                = {}
     local _plFilterText               = ""
+    local _currentDropdownH           = 0
 
     -- extra header space to make room for the dropdown result list underneath the searchbar
     local HEADER_H                    = 44
@@ -571,6 +572,7 @@ function TLPlayerlistModule:Build(cfg)
         dropdownRowCache = {}
 
         if filter == "" then
+            _currentDropdownH = 0
             dropdownFrame.Visible = false
             dropdownFrame.Size = UDim2.new(1, -PAD * 2, 0, 0)
             return
@@ -589,6 +591,7 @@ function TLPlayerlistModule:Build(cfg)
         dropdownFrame.Visible = true
 
         if #matches == 0 then
+            _currentDropdownH = 48
             dropdownEmptyLbl.Visible = true
             dropdownFrame.Size = UDim2.new(1, -PAD * 2, 0, 48)
             return
@@ -602,8 +605,9 @@ function TLPlayerlistModule:Build(cfg)
         end
 
         local visibleRows = math.min(#matches, DROPDOWN_MAX_ROWS)
+        _currentDropdownH = visibleRows * DROPDOWN_ROW_H
         dropdownList.CanvasSize = UDim2.new(0, 0, 0, #matches * DROPDOWN_ROW_H)
-        dropdownFrame.Size = UDim2.new(1, -PAD * 2, 0, visibleRows * DROPDOWN_ROW_H)
+        dropdownFrame.Size = UDim2.new(1, -PAD * 2, 0, _currentDropdownH)
     end
 
     local hdrLine                       = Instance.new("Frame", c)
@@ -1034,7 +1038,9 @@ function TLPlayerlistModule:Build(cfg)
             for _, entry in pairs(rowCache) do entry.row.Visible = false end
             noResultsLbl.Visible = false
             hdrLine.Visible = false
-            p.Size = UDim2.new(0, PANEL_W, 0, HEADER_H + 6 + dropdownFrame.AbsoluteSize.Y + 16)
+            local panelH = HEADER_H + 6 + _currentDropdownH + 16
+            p.Size = UDim2.new(0, PANEL_W, 0, panelH)
+            c.CanvasSize = UDim2.new(0, 0, 0, panelH)
             if countLbl and countLbl.Parent then countLbl.Text = tostring(#plrs) end
             return
         end
