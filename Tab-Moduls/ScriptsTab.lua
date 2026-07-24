@@ -5,6 +5,28 @@
 local ScriptsTab = {}
 
 function ScriptsTab.Init(ctx)
+    -- Universal Corner & Stroke Helpers
+    local function corner(parent, r)
+        if not parent then return nil end
+        local c = parent:FindFirstChildOfClass("UICorner") or Instance.new("UICorner")
+        c.CornerRadius = UDim.new(0, r or 8)
+        c.Parent = parent
+        return c
+    end
+
+    local function stroke(parent, thick, col, trans)
+        if not parent then return nil end
+        local s = parent:FindFirstChildOfClass("UIStroke") or Instance.new("UIStroke")
+        s.Thickness = thick or 1
+        s.Color = col or Color3.fromRGB(255, 255, 255)
+        s.Transparency = trans or 0
+        s.Parent = parent
+        return s
+    end
+
+    local function _makeDummyStroke(parent, thick, col, trans)
+        return stroke(parent, thick, col, trans)
+    end
     ctx = type(ctx) == "table" and ctx or {}
     local game = ctx.game or game
     local _genv = ctx._genv or (getgenv and getgenv()) or _G or {}
@@ -1995,7 +2017,6 @@ visualPage = Instance.new("Frame", sSubArea)
                         end
                     end
                     pcall(function() _sc.scriptsPanel.Size = UDim2.new(0, PANEL_W, 0, _sc.baseH) end)
-                end)
             
             _act_following, _act_followTarget, _act_followRSConn = false, nil,
                 nil                                                    
