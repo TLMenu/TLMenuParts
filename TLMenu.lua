@@ -4333,7 +4333,7 @@ sendNotif = function(title, text, dur, accentOverride)
                         settingToggleSetters["removeNametag"] = ntRemSet
                     end)
                     return nametagPage
-                end)() 
+                end)
 
                 subPages = { General = genPage, Keybinds = kbPage, Colors = colorsPage, Theme = themePage, ["C-CURSOR"] =
                 visualSettingsPage, Music = musicPage, Nametag = nametagPage }
@@ -5324,20 +5324,21 @@ sendNotif = function(title, text, dur, accentOverride)
                     end)
                     task.spawn(function()
                         task.wait(0.5)
-                        loadData()
-                        rebuildKeybindListener()
-                        sendNotif("SmartBar", T.notif_settings_loaded, 2)
+                        pcall(function() if type(loadData) == "function" then loadData() end end)
+                        pcall(function() if type(rebuildKeybindListener) == "function" then rebuildKeybindListener() end end)
+                        pcall(function() if type(sendNotif) == "function" then sendNotif("SmartBar", T.notif_settings_loaded, 2) end end)
                         
-                        if settingsState.guiScale and settingsState.guiScale > 0 and _TL_GUIScale then
+                        if settingsState and settingsState.guiScale and settingsState.guiScale > 0 and _TL_GUIScale then
                             _TL_GUIScale.Scale = settingsState.guiScale
                         end
                         
-                        if settingsState.guiPosition and _TL_refs._TL_applyGuiPosition then
+                        if settingsState and settingsState.guiPosition and _TL_refs and _TL_refs._TL_applyGuiPosition then
                             pcall(function() _TL_refs._TL_applyGuiPosition(settingsState.guiPosition) end)
                         end
                     end)
                     do
-                        local existing = PlayerGui:FindFirstChild("FPSWidget")
+                        local pGui = (LocalPlayer and LocalPlayer:FindFirstChildOfClass("PlayerGui")) or _SvcSG
+                        local existing = pGui and pGui:FindFirstChild("FPSWidget")
                         if not existing then
                             pcall(function()
                                 existing = game:GetService("CoreGui"):FindFirstChild("FPSWidget")
