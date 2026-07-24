@@ -45,6 +45,27 @@ function ScriptsTab.Init(ctx)
         return p, c
     end
     local C = ctx.C or {
+
+    local _C3_DEF_BG   = Color3.fromRGB(18, 18, 20)
+    local _C3_DEF_BG2  = Color3.fromRGB(26, 26, 28)
+    local _C3_DEF_BG3  = Color3.fromRGB(34, 34, 38)
+    local _C3_DEF_ACC  = Color3.fromRGB(0, 170, 255)
+    local _C3_DEF_SUB  = Color3.fromRGB(130, 135, 145)
+    local _C3_DEF_TXT  = Color3.fromRGB(255, 255, 255)
+    
+    if type(C) == "table" then
+        setmetatable(C, {
+            __index = function(_, k)
+                if k == "bg" or k == "bg1" or k == "panelBg" then return _C3_DEF_BG end
+                if k == "bg2" or k == "panelHdr" then return _C3_DEF_BG2 end
+                if k == "bg3" or k == "bg4" then return _C3_DEF_BG3 end
+                if k == "accent" or k == "accent2" then return _C3_DEF_ACC end
+                if k == "sub" or k == "sub2" then return _C3_DEF_SUB end
+                if k == "text" or k == "white" then return _C3_DEF_TXT end
+                return Color3.fromRGB(120, 120, 130)
+            end
+        })
+    end
         accent = Color3.fromRGB(0, 170, 255),
         accent2 = Color3.fromRGB(0, 200, 255),
         sub = Color3.fromRGB(150, 150, 150),
@@ -245,7 +266,7 @@ function ScriptsTab.Init(ctx)
                     local pill = Instance.new("Frame", parent)
                     pill.Size = UDim2.new(1, -32, 0, 24)
                     pill.Position = UDim2.new(0, 16, 0, yPos)
-                    pill.BackgroundColor3 = C.bg2; pill.BackgroundTransparency = 0
+                    pill.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28); pill.BackgroundTransparency = 0
                     pill.BorderSizePixel = 0; corner(pill, 12)
 
                     local pillLbl = Instance.new("TextLabel", pill)
@@ -267,7 +288,7 @@ function ScriptsTab.Init(ctx)
                     arrow.TextSize = 10; arrow.TextColor3 = C.text; arrow.ZIndex = 9; arrow.TextTransparency = 0.4
 
                     local ddFrame = Instance.new("Frame", ScreenGui)
-                    ddFrame.AnchorPoint = Vector2.new(0, 0); ddFrame.BackgroundColor3 = C.bg2
+                    ddFrame.AnchorPoint = Vector2.new(0, 0); ddFrame.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28)
                     ddFrame.BackgroundTransparency = 0; ddFrame.BorderSizePixel = 0
                     ddFrame.ZIndex = 5000; ddFrame.Visible = false
                     ; ddFrame.ClipsDescendants = true
@@ -314,7 +335,7 @@ function ScriptsTab.Init(ctx)
                         end
                         for _, pl in ipairs(plrs) do
                             local row = Instance.new("Frame", ddScroll)
-                            row.Size = UDim2.new(1, -4, 0, DD_IH); row.BackgroundColor3 = C.bg3
+                            row.Size = UDim2.new(1, -4, 0, DD_IH); row.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38)
                             row.BackgroundTransparency = 0.9; row.BorderSizePixel = 0; row.ZIndex = 5002; corner(row, 10)
                             local pad = Instance.new("UIPadding", row); pad.PaddingLeft = UDim.new(0, 12)
                             local nameLbl = Instance.new("TextLabel", row)
@@ -491,7 +512,7 @@ function ScriptsTab.Init(ctx)
                     local FLING_ROW_H = TROLL_TOP_H + TROLL_GAP + FLING_SUB_H + 8
                     local flingRow = Instance.new("Frame", trollPage)
                     flingRow.Size = UDim2.new(1, 0, 0, FLING_ROW_H); flingRow.LayoutOrder = 3
-                    flingRow.BackgroundColor3 = C.bg2 or _C3_BG2; flingRow.BackgroundTransparency = 0
+                    flingRow.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28) or _C3_BG2; flingRow.BackgroundTransparency = 0
                     flingRow.BorderSizePixel = 0; corner(flingRow, 12)
                     local flingTop = Instance.new("Frame", flingRow)
                     flingTop.Size = UDim2.new(1, 0, 0, TROLL_TOP_H); flingTop.Position = UDim2.new(0, 0, 0, 0)
@@ -516,7 +537,7 @@ function ScriptsTab.Init(ctx)
                     flingSub.TextXAlignment = Enum.TextXAlignment.Left
                     local flingTrack = Instance.new("Frame", flingTop)
                     flingTrack.Size = UDim2.new(0, 32, 0, 18); flingTrack.Position = UDim2.new(1, -44, 0.5, -9)
-                    flingTrack.BackgroundColor3 = C.bg3 or _C3_BG3
+                    flingTrack.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG3
                     flingTrack.BackgroundTransparency = 0.2; flingTrack.BorderSizePixel = 0; corner(flingTrack, 99)
                     local flingKnob = Instance.new("Frame", flingTrack)
                     flingKnob.Size = UDim2.new(0, 12, 0, 12); flingKnob.Position = UDim2.new(0, 2, 0.5, -6)
@@ -542,7 +563,7 @@ function ScriptsTab.Init(ctx)
                                 flingSetToggle(false); return
                             end
                         else
-                            twP(flingTrack, 0.15, { BackgroundColor3 = C.bg3 or _C3_BG3, BackgroundTransparency = 0.2 })
+                            twP(flingTrack, 0.15, { BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG3, BackgroundTransparency = 0.2 })
                             twP(flingKnob, 0.15, { BackgroundColor3 = _C3_SUB2, Position = UDim2.new(0, 2, 0.5, -6) })
                             flingMod.stop()
                         end
@@ -554,10 +575,10 @@ function ScriptsTab.Init(ctx)
                     flingRowBtn.BackgroundTransparency = 1; flingRowBtn.Text = ""; flingRowBtn.ZIndex = 5
                     flingRowBtn.MouseEnter:Connect(function()
                         _sc._playHoverSound()
-                        twP(flingRow, 0.08, { BackgroundColor3 = C.bg3 or _C3_BG4 })
+                        twP(flingRow, 0.08, { BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG4 })
                     end)
                     flingRowBtn.MouseLeave:Connect(function()
-                        twP(flingRow, 0.08, { BackgroundColor3 = C.bg2 or _C3_BG2 })
+                        twP(flingRow, 0.08, { BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28) or _C3_BG2 })
                     end)
                     local flingTogBtn = Instance.new("TextButton", flingTop)
                     flingTogBtn.Size = UDim2.new(0, 36, 0, 24); flingTogBtn.Position = UDim2.new(1, -44, 0.5, -12)
@@ -585,7 +606,7 @@ function ScriptsTab.Init(ctx)
                         end, flingWState2, function(body, width, yOffset, ac, setToggleFn)
                             local sRow = Instance.new("Frame", body)
                             sRow.Size = UDim2.new(1, -24, 0, 38); sRow.Position = UDim2.new(0, 12, 0, yOffset + 4)
-                            sRow.BackgroundColor3 = C.bg2; sRow.BackgroundTransparency = 0.4
+                            sRow.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28); sRow.BackgroundTransparency = 0.4
                             sRow.BorderSizePixel = 0; corner(sRow, 10)
                             local sStr = _makeDummyStroke(sRow); sStr.Thickness = 1; sStr.Color = ac; sStr.Transparency = 0.8
 
@@ -601,7 +622,7 @@ function ScriptsTab.Init(ctx)
 
                             local pRow = Instance.new("Frame", body)
                             pRow.Size = UDim2.new(1, -24, 0, 30); pRow.Position = UDim2.new(0, 12, 0, yOffset + 46)
-                            pRow.BackgroundColor3 = C.bg2; pRow.BackgroundTransparency = 0.4
+                            pRow.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28); pRow.BackgroundTransparency = 0.4
                             pRow.BorderSizePixel = 0; corner(pRow, 10)
                             local pStr = _makeDummyStroke(pRow); pStr.Thickness = 1; pStr.Color = C.bg3; pStr.Transparency = 0.6
 
@@ -612,7 +633,7 @@ function ScriptsTab.Init(ctx)
 
                             local pBtn = Instance.new("TextButton", pRow)
                             pBtn.Size = UDim2.new(1, -70, 1, -6); pBtn.Position = UDim2.new(0, 60, 0, 3)
-                            pBtn.BackgroundColor3 = C.bg3; pBtn.BackgroundTransparency = 0.3
+                            pBtn.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38); pBtn.BackgroundTransparency = 0.3
                             pBtn.BorderSizePixel = 0; corner(pBtn, 8)
                             pBtn.Text = flingWidgetSelected and flingWidgetSelected.Name or "Nearest"; pBtn.Font = Enum.Font.Gotham
                             pBtn.TextSize = 11; pBtn.TextColor3 = C.text; pBtn.TextXAlignment = Enum.TextXAlignment.Left
@@ -627,7 +648,7 @@ function ScriptsTab.Init(ctx)
                                 local drop = Instance.new("Frame", body)
                                 drop.Size = UDim2.new(0, width - 24, 0, actualH)
                                 drop.Position = UDim2.new(0, 12, 0, yOffset + 80)
-                                drop.BackgroundColor3 = C.bg2; drop.BackgroundTransparency = 0.1
+                                drop.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28); drop.BackgroundTransparency = 0.1
                                 drop.BorderSizePixel = 0; corner(drop, 10); drop.ZIndex = 15
                                 local dStr = _makeDummyStroke(drop); dStr.Thickness = 1; dStr.Color = C.bg3; dStr.Transparency = 0.4
 
@@ -651,7 +672,7 @@ function ScriptsTab.Init(ctx)
                                     row.BackgroundColor3 = (flingWidgetSelected == pl) and C.bg3 or C.bg2
                                     row.BackgroundTransparency = 0.6; row.BorderSizePixel = 0; row.Text = ""
                                     row.TextColor3 = C.text; row.ZIndex = 16
-                                    row.MouseEnter:Connect(function() row.BackgroundColor3 = C.bg3; row.BackgroundTransparency = 0.3 end)
+                                    row.MouseEnter:Connect(function() row.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38); row.BackgroundTransparency = 0.3 end)
                                     row.MouseLeave:Connect(function()
                                         row.BackgroundColor3 = (flingWidgetSelected == pl) and C.bg3 or C.bg2
                                         row.BackgroundTransparency = 0.6
@@ -834,7 +855,7 @@ movePage = Instance.new("Frame", sSubArea)
                         
                         local mPill = Instance.new("Frame", tfRow)
                         mPill.Size = UDim2.new(0, 85, 0, 26); mPill.Position = UDim2.new(0, 80, 0.5, -13)
-                        mPill.BackgroundColor3 = C.bg3; mPill.BackgroundTransparency = 0.5; corner(mPill, 8)
+                        mPill.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38); mPill.BackgroundTransparency = 0.5; corner(mPill, 8)
                         mPill.ZIndex = 12; local mPillS = stroke(mPill, 1.2, C.accent, 0.6)
 
                         local mBtn = Instance.new("TextButton", mPill)
@@ -842,16 +863,16 @@ movePage = Instance.new("Frame", sSubArea)
                         mBtn.Font = Enum.Font.GothamBlack; mBtn.TextSize = 8; mBtn.TextColor3 = _C3_WHITE; mBtn.ZIndex = 13
 
                         mBtn.MouseEnter:Connect(function()
-                            tw(mPill, 0.15, { BackgroundTransparency = 0.2, BackgroundColor3 = C.accent }):Play(); tw(mPillS, 0.15, { Transparency = 0.2 }):Play()
+                            tw(mPill, 0.15, { BackgroundTransparency = 0.2, BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255) }):Play(); tw(mPillS, 0.15, { Transparency = 0.2 }):Play()
                         end)
                         mBtn.MouseLeave:Connect(function()
-                            tw(mPill, 0.15, { BackgroundTransparency = 0.5, BackgroundColor3 = C.bg3 }):Play(); tw(mPillS, 0.15, { Transparency = 0.6 }):Play()
+                            tw(mPill, 0.15, { BackgroundTransparency = 0.5, BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) }):Play(); tw(mPillS, 0.15, { Transparency = 0.6 }):Play()
                         end)
 
                         
                         local mDrop = Instance.new("Frame", ScreenGui)
                         mDrop.Size = UDim2.new(0, 85, 0, #tfModeList * 26 + 4)
-                        mDrop.BackgroundColor3 = C.bg2; mDrop.Visible = false; mDrop.ZIndex = 11000; corner(mDrop, 8); stroke(mDrop, 1.5, C.accent, 0.3)
+                        mDrop.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28); mDrop.Visible = false; mDrop.ZIndex = 11000; corner(mDrop, 8); stroke(mDrop, 1.5, C.accent, 0.3)
 
                         
                         RunService.RenderStepped:Connect(function()
@@ -866,7 +887,7 @@ movePage = Instance.new("Frame", sSubArea)
                         for i, m in ipairs(tfModeList) do
                             local b = Instance.new("TextButton", mDrop)
                             b.Size = UDim2.new(1, -8, 0, 24); b.Position = UDim2.new(0, 4, 0, (i - 1) * 26 + 2)
-                            b.BackgroundColor3 = C.bg3; b.BackgroundTransparency = 1; b.Text = m:upper()
+                            b.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38); b.BackgroundTransparency = 1; b.Text = m:upper()
                             b.Font = Enum.Font.GothamBold; b.TextSize = 8; b.TextColor3 = C.text; b.ZIndex = 11001; corner(b, 4)
 
                             b.MouseEnter:Connect(function() tw(b, 0.1, { BackgroundTransparency = 0.7 }):Play() end)
@@ -884,10 +905,10 @@ movePage = Instance.new("Frame", sSubArea)
                         local tfSpeed = tfMod.getSpeed()
                         local sTrack = Instance.new("Frame", tfRow)
                         sTrack.Size = UDim2.new(0, 110, 0, 6); sTrack.Position = UDim2.new(0, 222, 0.5, -3)
-                        sTrack.BackgroundColor3 = C.bg3; corner(sTrack, 3); stroke(sTrack, 1, C.accent2, 0.5)
+                        sTrack.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38); corner(sTrack, 3); stroke(sTrack, 1, C.accent2, 0.5)
                         sTrack.ZIndex = 12
                         local sFill = Instance.new("Frame", sTrack)
-                        sFill.Size = UDim2.new((tfSpeed - sMin) / (sMax - sMin), 0, 1, 0); sFill.BackgroundColor3 = C.accent2; corner(sFill, 3); sFill.ZIndex = 13
+                        sFill.Size = UDim2.new((tfSpeed - sMin) / (sMax - sMin), 0, 1, 0); sFill.BackgroundColor3 = C.accent or Color3.fromRGB(0, 170, 255)2; corner(sFill, 3); sFill.ZIndex = 13
                         local sKnob = Instance.new("Frame", sTrack)
                         sKnob.Size = UDim2.new(0, 12, 0, 12); sKnob.Position = UDim2.new((tfSpeed - sMin) / (sMax - sMin), -6, 0.5, -6)
                         sKnob.BackgroundColor3 = _C3_WHITE; corner(sKnob, 99); local sKnobS = stroke(sKnob, 1.5, C.accent2, 0); sKnob.ZIndex = 14
@@ -1178,7 +1199,7 @@ visualPage = Instance.new("Frame", sSubArea)
                     local shRow = Instance.new("Frame", visualPage)
                     shRow.Size = UDim2.new(1, 0, 0, 54)
                     shRow.Position = UDim2.new(0, 0, 0, 52)
-                    shRow.BackgroundColor3 = C.bg2 or _C3_BG2; shRow.BackgroundTransparency = 0
+                    shRow.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28) or _C3_BG2; shRow.BackgroundTransparency = 0
                     shRow.BorderSizePixel = 0; corner(shRow, 12); shRow.LayoutOrder = 5
                     local shRowS = _makeDummyStroke(shRow)
                     shRowS.Thickness = 1; shRowS.Color = C.bg3 or _C3_BG3; shRowS.Transparency = 0.3
@@ -1408,7 +1429,7 @@ visualPage = Instance.new("Frame", sSubArea)
                     local function applyFolderTheme(newT)
                         local accent = (newT and newT.accent) or (C.accent or _themePanelColor(accentCol, C.accent))
                         local textCol = (newT and newT.text) or (C.text or Color3.fromRGB(210, 255, 220))
-                        hdr.BackgroundColor3 = C.bg2 or Color3.fromRGB(3, 14, 6)
+                        hdr.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28) or Color3.fromRGB(3, 14, 6)
                         hdrDot.BackgroundColor3 = accent
                         iconLbl.TextColor3 = accent
                         nameLbl.TextColor3 = textCol
@@ -1440,12 +1461,12 @@ visualPage = Instance.new("Frame", sSubArea)
                         if _isMobile then return end
                         _sc._playHoverSound()
                         if headerVisible then
-                            twP(hdr, 0.08, { BackgroundColor3 = C.bg3 or Color3.fromRGB(7, 22, 10) })
+                            twP(hdr, 0.08, { BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or Color3.fromRGB(7, 22, 10) })
                         end
                     end)
                     btn.MouseLeave:Connect(function()
                         if headerVisible then
-                            twP(hdr, 0.08, { BackgroundColor3 = C.bg2 or Color3.fromRGB(3, 14, 6) })
+                            twP(hdr, 0.08, { BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28) or Color3.fromRGB(3, 14, 6) })
                         end
                     end)
 
@@ -1582,7 +1603,7 @@ visualPage = Instance.new("Frame", sSubArea)
 
                     local function applyFolderTheme(newT)
                         local accent = (newT and newT.accent) or (C.accent or _themePanelColor(accentCol, C.accent))
-                        container.BackgroundColor3 = C.bg2 or Color3.fromRGB(3, 14, 6)
+                        container.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28) or Color3.fromRGB(3, 14, 6)
                         scroll.ScrollBarImageColor3 = _themePanelColor(accentCol, accent)
                     end
 
@@ -1748,7 +1769,7 @@ visualPage = Instance.new("Frame", sSubArea)
                         fovVal.TextSize = 11; fovVal.TextColor3 = C.sub or Color3.fromRGB(180, 180, 180); fovVal.TextXAlignment = Enum.TextXAlignment.Right
                         local fovTrack = Instance.new("Frame", fovRow)
                         fovTrack.Size = UDim2.new(1, -32, 0, 6); fovTrack.Position = UDim2.new(0, 16, 0, 30)
-                        fovTrack.BackgroundColor3 = C.bg3 or Color3.fromRGB(60, 60, 70); fovTrack.BackgroundTransparency = 0.2
+                        fovTrack.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or Color3.fromRGB(60, 60, 70); fovTrack.BackgroundTransparency = 0.2
                         fovTrack.BorderSizePixel = 0; local _fc1 = Instance.new("UICorner", fovTrack); _fc1.CornerRadius = UDim.new(1, 0)
                         local fovFill = Instance.new("Frame", fovTrack)
                         local fovPct = (cfg.FOV - 30) / 270
@@ -1797,7 +1818,7 @@ visualPage = Instance.new("Frame", sSubArea)
                         smVal.TextSize = 11; smVal.TextColor3 = C.sub or Color3.fromRGB(180, 180, 180); smVal.TextXAlignment = Enum.TextXAlignment.Right
                         local smTrack = Instance.new("Frame", smRow)
                         smTrack.Size = UDim2.new(1, -32, 0, 6); smTrack.Position = UDim2.new(0, 16, 0, 30)
-                        smTrack.BackgroundColor3 = C.bg3 or Color3.fromRGB(60, 60, 70); smTrack.BackgroundTransparency = 0.2
+                        smTrack.BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or Color3.fromRGB(60, 60, 70); smTrack.BackgroundTransparency = 0.2
                         smTrack.BorderSizePixel = 0; local _sc1 = Instance.new("UICorner", smTrack); _sc1.CornerRadius = UDim.new(1, 0)
                         local smFill = Instance.new("Frame", smTrack)
                         local smPct = (cfg.Smoothness - 0.01) / 0.19
@@ -1859,7 +1880,7 @@ visualPage = Instance.new("Frame", sSubArea)
                 _sc.switchSCat = function(id)
                     for _, pg in pairs(_sc.subPages) do pg.Visible = false end
                     for _, cb in ipairs(_sc.catBtns) do
-                        twP(cb.card, 0.15, { BackgroundColor3 = C.bg2 or _C3_BG2 })
+                        twP(cb.card, 0.15, { BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28) or _C3_BG2 })
                         twP(cb.lbl, 0.15, { TextColor3 = C.sub or _C3_SUB })
                         cb.cStr.Color = C.bg3 or _C3_BG3; cb.cStr.Transparency = 0.3
                         cb.selBar.Visible = false
@@ -1909,7 +1930,7 @@ visualPage = Instance.new("Frame", sSubArea)
                     end
                     for _, cb in ipairs(_sc.catBtns) do
                         if cb.id == id then
-                            twP(cb.card, 0.20, { BackgroundColor3 = C.bg3 or _C3_BG4 })
+                            twP(cb.card, 0.20, { BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG4 })
                             twP(cb.lbl, 0.20, { TextColor3 = C.text })
                             cb.cStr.Color = cb.col; cb.cStr.Transparency = 0.5
                             cb.selBar.Visible = true
@@ -1940,7 +1961,7 @@ visualPage = Instance.new("Frame", sSubArea)
                         local card = Instance.new("Frame", sGrid)
                         card.Size = UDim2.new(0, _S_W, 0, _S_H)
                         card.Position = UDim2.new(0, xOff, 0, 0)
-                        card.BackgroundColor3 = C.bg2; card.BackgroundTransparency = 0
+                        card.BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28); card.BackgroundTransparency = 0
                         card.BorderSizePixel = 0; corner(card, 12)
                         local cStr = _makeDummyStroke(card)
                         cStr.Thickness = 1; cStr.Color = C.bg3 or _C3_BG3; cStr.Transparency = 0.3
@@ -1977,12 +1998,12 @@ visualPage = Instance.new("Frame", sSubArea)
                             if _isMobile then return end
                             _sc._playHoverSound()
                             if _sc.activeCat ~= catId then
-                                twP(card, 0.1, { BackgroundColor3 = C.bg3 or _C3_BG4 })
+                                twP(card, 0.1, { BackgroundColor3 = C.bg3 or Color3.fromRGB(34, 34, 38) or _C3_BG4 })
                             end
                         end)
                         btn.MouseLeave:Connect(function()
                             if _sc.activeCat ~= catId then
-                                twP(card, 0.1, { BackgroundColor3 = C.bg2 or _C3_BG2 })
+                                twP(card, 0.1, { BackgroundColor3 = C.bg2 or Color3.fromRGB(26, 26, 28) or _C3_BG2 })
                             end
                         end)
                         local _sCatBtnLock = false
