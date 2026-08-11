@@ -1281,6 +1281,14 @@ function ActionsTab.Init(ctx)
                             startQA74(target); _actionOk = true
                         elseif key == "ghost" then
                             startGhost(target); _actionOk = true
+                        elseif key == "shit" then
+                            startBB(target, "bb_shit"); _actionOk = true
+                        elseif key == "spidergrip" then
+                            startBB(target, "bb_spidergrip"); _actionOk = true
+                        elseif key == "fingering" then
+                            startBB(target, "bb_fingering"); _actionOk = true
+                        elseif key == "ghosthover" then
+                            startBB(target, "bb_ghosthover"); _actionOk = true
                         elseif key == "carry" then
                             startCarry(target); _actionOk = true
                         elseif key == "carryshoulder" then
