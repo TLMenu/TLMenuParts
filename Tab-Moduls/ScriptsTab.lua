@@ -2369,6 +2369,10 @@ _TL_state.actions = {}
                 { key = "sucking",     label = "Sucking 2",    col = Color3.fromRGB(255, 80, 160) },
                 { key = "suckit",      label = "Suck It",      col = Color3.fromRGB(255, 100, 180) },
                 { key = "ghost",       label = "Ghost",        col = Color3.fromRGB(160, 160, 255) },
+                { key = "shit",        label = "Shit on Head",  col = Color3.fromRGB(139, 90, 43) },
+                { key = "spidergrip",  label = "Spider Grip",   col = Color3.fromRGB(80, 180, 80) },
+                { key = "fingering",   label = "Fingering",     col = Color3.fromRGB(200, 100, 150) },
+                { key = "ghosthover",  label = "Ghost Hover",   col = Color3.fromRGB(180, 180, 220) },
             }
             
 
