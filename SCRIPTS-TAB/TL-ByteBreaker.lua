@@ -96,6 +96,10 @@ local ANIM_IDS = {
     bb_piggyback     = "108744973494490",
     bb_piggyback2    = "92706401579816",
     bb_stand         = "133594786690861",
+    bb_shit          = "138014399586847",
+    bb_spidergrip    = "110511723808460",
+    bb_fingering     = "98380411570915",
+    bb_ghosthover    = "81798658490747",
 }
 
 local ATTACH_MODES = {
@@ -129,6 +133,10 @@ local ATTACH_MODES = {
     bb_soh           = { y = 1,    headRelative = true },
     bb_shouldersit   = { x = 1.8,  y = 2.2,   z = 0 },
     bb_friend        = { x = 3,    y = 0,     z = 0 },
+    bb_shit          = { x = 0,    y = 3.5,   z = -1.2 },
+    bb_spidergrip    = { x = 0,    y = 0.2,   z = -0.8,  rotY = 180, osc = 0.35, oscSpeed = 0.8 },
+    bb_fingering     = { x = 0,    y = -1.8,  z = 1.9,   rotY = 0 },
+    bb_ghosthover    = { x = 0,    y = 4.0,   z = 1.5,   rotY = 0 },
 }
 
 -- ════════════════════════════════════════════════════════════════════════════
