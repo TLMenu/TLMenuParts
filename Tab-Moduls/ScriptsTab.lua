@@ -1867,6 +1867,68 @@ visualPage = Instance.new("Frame", sSubArea)
                     function(on) setCut(on) end)
                 _TL_refs._TL_setCut = setCut
 
+                do
+                    local gvMod = _TL_loadModule("SCRIPTS-TAB/GVAutoFish")
+                    if not gvMod and type(readfile) == "function" and type(isfile) == "function" then
+                        local paths = { "SCRIPTS-TAB/GVAutoFish.lua", "GVAutoFish.lua" }
+                        for _, p in ipairs(paths) do
+                            if isfile(p) then
+                                local okS, src = pcall(readfile, p)
+                                if okS and src then
+                                    local fn = loadstring(src)
+                                    if fn then
+                                        local okE, res = pcall(fn)
+                                        if okE and res then gvMod = res; break end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    if gvMod and gvMod.init then
+                        gvMod.init({
+                            RunService = RunService,
+                            Players = Players,
+                            LocalPlayer = LocalPlayer,
+                            UserInputService = UserInputService,
+                            sendNotif = sendNotif,
+                            C = C,
+                        })
+                        local gvRow, gvSetFn = miscToolsAddRow("GV AutoFish", "German Voice 🎣", C.accent2 or C.accent, false,
+                            function(on)
+                                if on then
+                                    gvMod.start()
+                                    if sendNotif then sendNotif("GV AutoFish", "Auto-Angeln aktiv 🎣", 3) end
+                                else
+                                    gvMod.stop()
+                                    if sendNotif then sendNotif("GV AutoFish", "Auto-Angeln deaktiviert.", 2) end
+                                end
+                            end)
+                        if gvMod.onToggleChanged then
+                            gvMod.onToggleChanged(function(on)
+                                if gvSetFn then gvSetFn(on, true) end
+                            end)
+                        end
+                        if gvRow then
+                            local hudBtn = Instance.new("TextButton", gvRow)
+                            hudBtn.Size = UDim2.new(0, 42, 0, 22)
+                            hudBtn.Position = UDim2.new(1, -95, 0.5, -11)
+                            hudBtn.BackgroundColor3 = C.bg3 or Color3.fromRGB(35, 35, 42)
+                            hudBtn.BackgroundTransparency = 0.3
+                            hudBtn.BorderSizePixel = 0
+                            hudBtn.Text = "HUD"
+                            hudBtn.Font = Enum.Font.GothamBold
+                            hudBtn.TextSize = 10
+                            hudBtn.TextColor3 = C.accent or Color3.fromRGB(0, 200, 255)
+                            hudBtn.ZIndex = 8
+                            corner(hudBtn, 6)
+                            local hudStroke = stroke(hudBtn, 1, C.accent or Color3.fromRGB(0, 200, 255), 0.5)
+                            hudBtn.MouseButton1Click:Connect(function()
+                                if gvMod.toggleGui then gvMod.toggleGui() end
+                            end)
+                        end
+                    end
+                end
+
                 _sc.miscLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                     _sc.updateMiscSize()
                 end)
