@@ -1,9 +1,9 @@
 --!nocheck
 --============================================================
--- TLMenu Module: GVAutoFish (German Voice Auto Fishing V2)
+-- TLMenu Module: GVAutoFish (German Voice Auto Fishing)
 -- Direct-State Controller: schreibt IsReeling direkt in den
 -- FishingController (kein VirtualInput, keine Maus-Klicks).
--- Standalone-fähig & nahtlos in TLMenu integriert.
+-- HUD-less / Headless: Reine Hintergrundlogik gesteuert über TLMenu.
 --============================================================
 
 local M = {}
@@ -28,7 +28,7 @@ local S = {
     pendingSince = 0, lastActivate = 0,
     catches = 0, earned = 0,
     lastRewardText = "", lastRewardT = 0, lastRewardAmt = 0,
-    status = "Bereit. Schalte AN zum Starten.",
+    status = "Bereit.",
     FC = nil, FU = nil,
 }
 
@@ -128,7 +128,6 @@ end
 
 -- Zielt die Maus auf den naechsten Wasserpunkt (mit Offset-Korrektur)
 -- und verifiziert den Wurf per Raycast exakt so wie das Spiel
--- (erst HRP->Maus, dann Kamera-Ray). Gibt zurueck: ok, distanz.
 local function aimAtWater()
     local fp = fishingPoint()
     local char = player.Character
@@ -194,180 +193,10 @@ local function aimAtWater()
     return false, dist
 end
 
---================ GUI ================
-local guiParent = nil
-pcall(function()
-    if typeof(gethui) == "function" then guiParent = gethui() end
-end)
-if not guiParent then guiParent = player:WaitForChild("PlayerGui") end
-
-local gui = Instance.new("ScreenGui")
-gui.Name = "BreadFishV2"
-gui.ResetOnSpawn = false
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-gui.DisplayOrder = 500
-gui.Parent = guiParent
-
-local Main = Instance.new("Frame")
-Main.Name = "Main"
-Main.Size = UDim2.new(0, 240, 0, 172)
-Main.Position = UDim2.new(0, 20, 0.35, 0)
-Main.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
-Main.BorderSizePixel = 0
-Main.Active = true
-Main.Parent = gui
-local mainCorner = Instance.new("UICorner"); mainCorner.CornerRadius = UDim.new(0, 8); mainCorner.Parent = Main
-local mainStroke = Instance.new("UIStroke"); mainStroke.Color = Color3.fromRGB(0, 200, 255); mainStroke.Thickness = 1.2; mainStroke.Transparency = 0.3; mainStroke.Parent = Main
-
-local Title = Instance.new("Frame")
-Title.Name = "Title"
-Title.Size = UDim2.new(1, 0, 0, 34)
-Title.BackgroundColor3 = Color3.fromRGB(26, 26, 34)
-Title.BorderSizePixel = 0
-Title.Active = true
-Title.Parent = Main
-local tCorner = Instance.new("UICorner"); tCorner.CornerRadius = UDim.new(0, 8); tCorner.Parent = Title
-
-local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Size = UDim2.new(1, -44, 1, 0)
-TitleLabel.Position = UDim2.new(0, 10, 0, 0)
-TitleLabel.BackgroundTransparency = 1
-TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.TextSize = 13
-TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleLabel.Text = "🎣 GV AutoFish"
-TitleLabel.Parent = Title
-
-local MinBtn = Instance.new("TextButton")
-MinBtn.Size = UDim2.new(0, 30, 0, 24)
-MinBtn.Position = UDim2.new(1, -36, 0.5, -12)
-MinBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 58)
-MinBtn.Font = Enum.Font.GothamBold
-MinBtn.TextSize = 16
-MinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-MinBtn.Text = "–"
-MinBtn.AutoButtonColor = true
-MinBtn.Parent = Title
-local mCorner = Instance.new("UICorner"); mCorner.CornerRadius = UDim.new(0, 6); mCorner.Parent = MinBtn
-
-local Body = Instance.new("Frame")
-Body.Name = "Body"
-Body.Position = UDim2.new(0, 0, 0, 34)
-Body.Size = UDim2.new(1, 0, 1, -34)
-Body.BackgroundTransparency = 1
-Body.Parent = Main
-
-local ToggleBtn = Instance.new("TextButton")
-ToggleBtn.Size = UDim2.new(1, -20, 0, 42)
-ToggleBtn.Position = UDim2.new(0, 10, 0, 6)
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(160, 40, 40)
-ToggleBtn.Font = Enum.Font.GothamBold
-ToggleBtn.TextSize = 14
-ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleBtn.Text = "AUTO FISHING: AUS"
-ToggleBtn.AutoButtonColor = true
-ToggleBtn.Parent = Body
-local tgCorner = Instance.new("UICorner"); tgCorner.CornerRadius = UDim.new(0, 7); tgCorner.Parent = ToggleBtn
-local tgStroke = Instance.new("UIStroke"); tgStroke.Color = Color3.fromRGB(255, 255, 255); tgStroke.Thickness = 1; tgStroke.Transparency = 0.8; tgStroke.Parent = ToggleBtn
-
-local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Size = UDim2.new(1, -20, 0, 56)
-StatusLabel.Position = UDim2.new(0, 10, 0, 52)
-StatusLabel.BackgroundTransparency = 1
-StatusLabel.Font = Enum.Font.Gotham
-StatusLabel.TextSize = 12
-StatusLabel.TextWrapped = true
-StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
-StatusLabel.TextYAlignment = Enum.TextYAlignment.Top
-StatusLabel.TextColor3 = Color3.fromRGB(180, 180, 190)
-StatusLabel.Text = "Bereit."
-StatusLabel.Parent = Body
-
-local StatsLabel = Instance.new("TextLabel")
-StatsLabel.Size = UDim2.new(1, -20, 0, 20)
-StatsLabel.Position = UDim2.new(0, 10, 1, -24)
-StatsLabel.BackgroundTransparency = 1
-StatsLabel.Font = Enum.Font.GothamBold
-StatsLabel.TextSize = 12
-StatsLabel.TextXAlignment = Enum.TextXAlignment.Left
-StatsLabel.TextColor3 = Color3.fromRGB(120, 220, 140)
-StatsLabel.Text = "Fänge: 0 • +$0"
-StatsLabel.Parent = Body
-
-local FULL_H, MINI_H = 172, 34
-local minimized = false
-MinBtn.MouseButton1Click:Connect(function()
-    minimized = not minimized
-    Body.Visible = not minimized
-    Main.Size = UDim2.new(0, 240, 0, minimized and MINI_H or FULL_H)
-    MinBtn.Text = minimized and "+" or "–"
-end)
-
-do -- Dragging (nur über Titelleiste)
-    local dragging = false
-    local dragStart, startPos, dragInput = nil, nil, nil
-    Title.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = Main.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
-    end)
-    Title.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement
-            or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input == dragInput then
-            local d = input.Position - dragStart
-            Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
-        end
-    end)
-end
-
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.KeyCode == Enum.KeyCode.LeftAlt and alive() then
-        gui.Enabled = not gui.Enabled
-    end
-end)
-
-local _toggleCallbacks = {}
-local function fireToggleCallbacks(on)
-    for _, cb in ipairs(_toggleCallbacks) do
-        pcall(cb, on)
-    end
-end
-
-local function refreshToggle()
-    local acc = (_deps.C and _deps.C.accent) or Color3.fromRGB(0, 200, 255)
-    if S.enabled then
-        ToggleBtn.Text = "AUTO FISHING: AN"
-        ToggleBtn.BackgroundColor3 = Color3.fromRGB(35, 150, 70)
-        mainStroke.Color = acc
-        mainStroke.Transparency = 0.1
-    else
-        ToggleBtn.Text = "AUTO FISHING: AUS"
-        ToggleBtn.BackgroundColor3 = Color3.fromRGB(160, 40, 40)
-        mainStroke.Color = Color3.fromRGB(60, 60, 75)
-        mainStroke.Transparency = 0.4
-    end
-end
-
-local function setEnabled(on, suppressNotify)
+local function setEnabled(on)
     local stateOn = on and true or false
     if S.enabled == stateOn then return end
     S.enabled = stateOn
-    refreshToggle()
     if S.enabled then
         S.prevFC = nil; S.fishVel = 0; S.hold = false
         S.lastHoldT = os.clock(); S.blipUntil = 0
@@ -378,11 +207,7 @@ local function setEnabled(on, suppressNotify)
         S.hold = false
         S.status = "Ausgeschaltet."
     end
-    if not suppressNotify then
-        fireToggleCallbacks(S.enabled)
-    end
 end
-ToggleBtn.MouseButton1Click:Connect(function() setEnabled(not S.enabled) end)
 
 --================ CONTROL (RenderStepped, 60 Hz, normierte States) ================
 local controlConn = nil
@@ -552,39 +377,31 @@ task.spawn(function()
                 local rewardFresh = (os.clock() - S.lastRewardT) < 2.5
                 if rewardFresh or S.lastProg > 0.9 then
                     S.catches = S.catches + 1
-                    S.earned = S.earned + (rewardFresh and S.lastRewardAmt or 0)
+                    local gained = (rewardFresh and S.lastRewardAmt or 0)
+                    S.earned = S.earned + gained
                     S.lastWasCatch = true
+                    if _deps.sendNotif and gained > 0 then
+                        pcall(_deps.sendNotif, "AutoFish", string.format("Fisch gefangen! +$%d (Gesamt: %d)", gained, S.catches), 2)
+                    end
                 else
                     S.lastWasCatch = false
                 end
                 S.lastEnd = os.clock()
                 S.lastProg = 0
-                pcall(function()
-                    StatsLabel.Text = string.format("Fänge: %d • +$%d", S.catches, S.earned)
-                end)
             end
             S.prevActive = active
-            pcall(function() StatusLabel.Text = S.enabled and S.status or "AUS (AN zum Starten)" end)
         end
         task.wait(0.2)
     end
 end)
 
-refreshToggle()
-
 --================ Module API ================
 function M.init(deps)
     _deps = deps or {}
-    if _deps.C and _deps.C.accent then
-        pcall(function()
-            mainStroke.Color = _deps.C.accent
-        end)
-    end
 end
 
 function M.start()
     setEnabled(true)
-    gui.Enabled = true
 end
 
 function M.stop()
@@ -595,32 +412,21 @@ function M.toggle()
     setEnabled(not S.enabled)
 end
 
-function M.set(on, suppress)
-    setEnabled(on, suppress)
+function M.set(on)
+    setEnabled(on)
 end
 
 function M.isActive()
     return S.enabled
 end
 
-function M.toggleGui(visible)
-    if visible ~= nil then
-        gui.Enabled = visible
-    else
-        gui.Enabled = not gui.Enabled
-    end
-end
-
-function M.onToggleChanged(fn)
-    if type(fn) == "function" then
-        table.insert(_toggleCallbacks, fn)
-    end
+function M.getStatus()
+    return S.status, S.catches, S.earned
 end
 
 function M.shutdown()
     _G.__BreadFishV2Token = ((_G.__BreadFishV2Token or 0) + 1)
     pcall(function() if controlConn then controlConn:Disconnect() end end)
-    pcall(function() gui:Destroy() end)
     _G.__BreadFishV2 = nil
 end
 
