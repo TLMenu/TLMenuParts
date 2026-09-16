@@ -179,7 +179,7 @@ flyScreenGui.ResetOnSpawn   = false
 
 local Wrapper = Instance.new("Frame")
 Wrapper.Name = "Wrapper"
-Wrapper.Size = UDim2.new(0, 604, 0, 44)
+Wrapper.Size = UDim2.new(0, 620, 0, 44)
 Wrapper.AnchorPoint = Vector2.new(0.5, 0)
 Wrapper.Position = UDim2.new(0.5, 0, 0, 14)
 Wrapper.BackgroundTransparency = 1
@@ -192,15 +192,15 @@ Wrapper.Visible = false
 -- Outer ambient glow / shadow
 local Shadow = Instance.new("ImageLabel")
 Shadow.Name = "Shadow"
-Shadow.AnchorPoint = Vector2.new(0.5, 0.5)
-Shadow.Position = UDim2.new(0.5, 0, 0.5, 3)
-Shadow.Size = UDim2.new(1, 28, 1, 28)
+Shadow.Position = UDim2.new(0, -12, 0, -10)
+Shadow.Size = UDim2.new(1, 24, 1, 24)
 Shadow.BackgroundTransparency = 1
+Shadow.BorderSizePixel = 0
 Shadow.Image = "rbxassetid://1316045217"
 Shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
-Shadow.ImageTransparency = 0.45
+Shadow.ImageTransparency = 0.65
 Shadow.ScaleType = Enum.ScaleType.Slice
-Shadow.SliceCenter = Rect.new(10, 10, 118, 118)
+Shadow.SliceCenter = Rect.new(15, 15, 113, 113)
 Shadow.ZIndex = 1
 Shadow.Parent = Wrapper
 
@@ -553,7 +553,7 @@ NcTagText.Parent = NcTag
 
 -- -- 5. ANIMATION STYLE DROPDOWN BUTTON --
 local AnimBtn, animStroke = createButton("", function() end)
-AnimBtn.Size = UDim2.new(0, 136, 0, 32)
+AnimBtn.Size = UDim2.new(0, 154, 0, 32)
 AnimBtn.LayoutOrder = 4
 AnimBtn.Parent = ButtonContainer
 
@@ -571,7 +571,7 @@ AnimPrefix.Parent = AnimBtn
 
 local AnimNameLabel = Instance.new("TextLabel")
 AnimNameLabel.Name = "AnimNameLabel"
-AnimNameLabel.Size = UDim2.new(1, -60, 1, 0)
+AnimNameLabel.Size = UDim2.new(1, -50, 1, 0)
 AnimNameLabel.Position = UDim2.new(0, 44, 0, 0)
 AnimNameLabel.BackgroundTransparency = 1
 AnimNameLabel.Text = animSets[currentAnimSet].name:upper()
@@ -596,83 +596,6 @@ DropArrow.TextSize = 10
 DropArrow.ZIndex = 5
 DropArrow.Parent = AnimBtn
 
--- -- 6. REAL-TIME SPEEDOMETER GAUGE --
-local SpeedHUDReplace = Instance.new("Frame")
-SpeedHUDReplace.Size = UDim2.new(0, 118, 0, 32)
-SpeedHUDReplace.BackgroundTransparency = 1
-SpeedHUDReplace.LayoutOrder = 5
-SpeedHUDReplace.ZIndex = 4
-SpeedHUDReplace.Parent = ButtonContainer
-
-local SpeedLiveLabel = Instance.new("TextLabel")
-SpeedLiveLabel.Size = UDim2.new(1, 0, 0, 15)
-SpeedLiveLabel.Position = UDim2.new(0, 0, 0, 2)
-SpeedLiveLabel.BackgroundTransparency = 1
-SpeedLiveLabel.Text = "<font color='#FFFFFF'><b>0</b></font> <font color='#8A8A9E' size='8'>STUDS/S</font>"
-SpeedLiveLabel.TextColor3 = C.text
-SpeedLiveLabel.Font = Enum.Font.GothamBold
-SpeedLiveLabel.TextSize = 10
-SpeedLiveLabel.TextXAlignment = Enum.TextXAlignment.Left
-SpeedLiveLabel.RichText = true
-SpeedLiveLabel.ZIndex = 5
-SpeedLiveLabel.Parent = SpeedHUDReplace
-
-local SliderBg = Instance.new("Frame")
-SliderBg.Size = UDim2.new(1, 0, 0, 5)
-SliderBg.Position = UDim2.new(0, 0, 1, -7)
-SliderBg.BackgroundColor3 = Color3.fromRGB(24, 26, 36)
-SliderBg.BorderSizePixel = 0
-SliderBg.ClipsDescendants = true
-SliderBg.ZIndex = 5
-SliderBg.Parent = SpeedHUDReplace
-corner(SliderBg, 3)
-
-local SliderFill = Instance.new("Frame")
-SliderFill.Size = UDim2.new(0, 0, 1, 0)
-SliderFill.BackgroundColor3 = C.accent
-SliderFill.BorderSizePixel = 0
-SliderFill.ZIndex = 6
-SliderFill.Parent = SliderBg
-corner(SliderFill, 3)
-
-local sfg = Instance.new("UIGradient", SliderFill)
-sfg.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 240, 255))
-})
-
--- -- 7. CLOSE / EXIT BUTTON --
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Name = "CloseBtn"
-CloseBtn.Size = UDim2.new(0, 26, 0, 26)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(24, 26, 36)
-CloseBtn.BackgroundTransparency = 0.5
-CloseBtn.Text = "X"
-CloseBtn.TextColor3 = Color3.fromRGB(160, 165, 185)
-CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.TextSize = 11
-CloseBtn.LayoutOrder = 6
-CloseBtn.BorderSizePixel = 0
-CloseBtn.AutoButtonColor = false
-CloseBtn.ZIndex = 5
-CloseBtn.Parent = ButtonContainer
-corner(CloseBtn, 7)
-
-local cbStroke = Instance.new("UIStroke", CloseBtn)
-cbStroke.Color = Color3.fromRGB(45, 50, 70)
-cbStroke.Thickness = 1
-cbStroke.Transparency = 0.7
-
-bind(CloseBtn.MouseEnter, function()
-    TweenService:Create(CloseBtn, TweenInfo.new(0.12), { BackgroundColor3 = Color3.fromRGB(239, 68, 68), BackgroundTransparency = 0.1, TextColor3 = Color3.new(1, 1, 1) }):Play()
-end)
-bind(CloseBtn.MouseLeave, function()
-    TweenService:Create(CloseBtn, TweenInfo.new(0.15), { BackgroundColor3 = Color3.fromRGB(24, 26, 36), BackgroundTransparency = 0.5, TextColor3 = Color3.fromRGB(160, 165, 185) }):Play()
-end)
-bind(CloseBtn.MouseButton1Click, function()
-    setFly(false)
-end)
-
 -- -- DROPDOWN CARD (PILL OUTER) --
 local PILL_EXPANDED_H, PILL_GAP = 224, 8
 local dropOpen = false
@@ -680,7 +603,7 @@ local dropOpen = false
 local PillOuter = Instance.new("Frame")
 PillOuter.Size = UDim2.new(0, 160, 0, 0)
 PillOuter.AnchorPoint = Vector2.new(0.5, 0)
-PillOuter.Position = UDim2.new(0, 478, 0, 44 + PILL_GAP)
+PillOuter.Position = UDim2.new(0, 479, 0, 44 + PILL_GAP)
 PillOuter.BackgroundColor3 = Color3.fromRGB(12, 14, 20)
 PillOuter.BackgroundTransparency = 0.05
 PillOuter.BorderSizePixel = 0
@@ -880,10 +803,6 @@ updateFlyPanel = function()
     
     TweenService:Create(mStroke, TweenInfo.new(0.25), { Color = data.color }):Play()
     TweenService:Create(pillStroke, TweenInfo.new(0.25), { Color = data.color }):Play()
-    
-    if SliderFill then
-        TweenService:Create(SliderFill, TweenInfo.new(0.15), { BackgroundColor3 = data.color }):Play()
-    end
 
     if NoclipBtn and NcTag and NcTagText then
         if noclipFly then
@@ -1202,21 +1121,6 @@ local function startFly()
         brakeForce = math.clamp(brakeIntensity, 0, 1)
         prevVel = currentVel
 
-        
-        
-        
-        if SpeedLiveLabel then
-            SpeedLiveLabel.Text = string.format("<font color='#FFFFFF'><b>%d</b></font> <font color='#8A8A9E' size='8'>STUDS/S</font>",
-                math.floor(_currentSpeedMag + 0.5))
-        end
-        if SliderFill then
-            local pct = math.clamp(_currentSpeedMag / math.max(_currentMaxSpeed, 1), 0, 1)
-            SliderFill.Size = UDim2.new(pct, 0, 1, 0)
-        end
-
-        
-        
-        
         if not noclipFly then
             _flyRayParams.FilterDescendantsInstances = { myChar }
             local ray = workspace:Raycast(myHRP.Position, Vector3.new(0, -3.2, 0), _flyRayParams)
