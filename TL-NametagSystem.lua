@@ -243,25 +243,34 @@ local function parseColor(val)
     return Color3.new(1, 1, 1)
 end
 
+local function _resolveFont(name, fallback)
+    local ok, f = pcall(function() return Enum.Font[name] end)
+    if ok and typeof(f) == "EnumItem" then return f end
+    return fallback or Enum.Font.SourceSans
+end
+
 local FONT_MAP = {
-    GothamBold = Enum.Font.GothamBold,
-    Gotham = Enum.Font.Gotham,
-    GothamMedium = Enum.Font.GothamMedium,
-    GothamBlack = Enum.Font.GothamBlack,
-    GothamLight = Enum.Font.GothamLight,
-    SourceSans = Enum.Font.SourceSans,
-    SourceSansBold = Enum.Font.SourceSansBold,
-    Arial = Enum.Font.Arial,
-    ArialBold = Enum.Font.ArialBold,
-    Ubuntu = Enum.Font.Ubuntu,
-    UbuntuBold = Enum.Font.UbuntuBold,
+    GothamBold     = _resolveFont("GothamBold", Enum.Font.SourceSansBold),
+    Gotham         = _resolveFont("Gotham", Enum.Font.SourceSans),
+    GothamMedium   = _resolveFont("GothamMedium", Enum.Font.SourceSans),
+    GothamBlack    = _resolveFont("GothamBlack", Enum.Font.SourceSansBold),
+    GothamLight    = _resolveFont("GothamLight", _resolveFont("Gotham", Enum.Font.SourceSans)),
+    SourceSans     = _resolveFont("SourceSans", Enum.Font.SourceSans),
+    SourceSansBold = _resolveFont("SourceSansBold", Enum.Font.SourceSansBold),
+    Arial          = _resolveFont("Arial", Enum.Font.SourceSans),
+    ArialBold      = _resolveFont("ArialBold", Enum.Font.SourceSansBold),
+    Ubuntu         = _resolveFont("Ubuntu", Enum.Font.SourceSans),
+    UbuntuBold     = _resolveFont("UbuntuBold", Enum.Font.SourceSansBold),
 }
 
 local function getSafeFont(name)
-    if FONT_MAP[name] then return FONT_MAP[name] end
-    local ok, f = pcall(function() return Enum.Font[name] end)
-    if ok and f then return f end
-    return Enum.Font.GothamBold
+    if not name then return FONT_MAP.GothamBold or Enum.Font.SourceSansBold end
+    if typeof(name) == "EnumItem" then return name end
+    local str = tostring(name)
+    if FONT_MAP[str] then return FONT_MAP[str] end
+    local ok, f = pcall(function() return Enum.Font[str] end)
+    if ok and typeof(f) == "EnumItem" then return f end
+    return FONT_MAP.GothamBold or Enum.Font.SourceSansBold
 end
 
 local EASING_MAP = {
