@@ -167,6 +167,8 @@ local QA_CATS = {{
         { key = "backshots",   label = "Backshots",    imageId = "rbxassetid://112450246602990" },
         { key = "doggy",       label = "Doggy",        imageId = "rbxassetid://72579312094126" },
         { key = "pussyspread", label = "Pussy Spread", imageId = "rbxassetid://72579312094126" },
+        { key = "spidergrip",  label = "Spider Grip",  imageId = "rbxassetid://72579312094126" },
+        { key = "fingering",   label = "Fingering",    imageId = "rbxassetid://72579312094126" },
     }
 }, {
     label = "1X Action",
@@ -187,6 +189,7 @@ local QA_CATS = {{
         { key = "upsidedown", label = "Upside Down", imageId = "rbxassetid://89009236995193" },
         { key = "crossud",    label = "Cross UD",    imageId = "rbxassetid://77458828386203" },
         { key = "ghost",      label = "Ghost",       imageId = "rbxassetid://77104113506431" },
+        { key = "shit",       label = "Shit on Head", imageId = "rbxassetid://86857269527024" },
     }
 }, {
     label = "Roleplay",
@@ -204,6 +207,7 @@ local QA_CATS = {{
         { key = "shouldersit",   label = "Shouldersit",       imageId = "rbxassetid://86857269527024" },
         { key = "stand",         label = "Stand",             imageId = "rbxassetid://86857269527024" },
         { key = "headstand",     label = "Head Stand",        imageId = "rbxassetid://86857269527024" },
+        { key = "ghosthover",    label = "Ghost Hover",       imageId = "rbxassetid://77104113506431" },
     }
 }}
 
@@ -247,6 +251,8 @@ local _qaToBB = {
     hug = "bb_hug", hug2 = "bb_hug2", carry = "bb_carry",
     carryshoulder = "bb_carryshoulder", shouldersit = "bb_shouldersit",
     stand = "bb_stand", headstand = "bb_headstand",
+    shit = "bb_shit", spidergrip = "bb_spidergrip",
+    fingering = "bb_fingering", ghosthover = "bb_ghosthover",
 }
 
 local function mkF(parent, sz, pos, col, alpha, r)
@@ -531,6 +537,7 @@ _qb.stopQAAction = function(keepRespawn)
         if _af.qa74Active then
             pcall(_qb.stopQA74); _af.qa74Active = false
         end
+        pcall(function() _qb.stopBB() end)
         pcall(_qb.safeStand)
     end)
 end
