@@ -173,11 +173,15 @@ flyScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 flyScreenGui.ResetOnSpawn   = false
 
 
+-- ════════════════════════════════════════════════════════════════
+--  MODERN FLOATING CYBER-GLASS FLY HUD BAR
+-- ════════════════════════════════════════════════════════════════
+
 local Wrapper = Instance.new("Frame")
 Wrapper.Name = "Wrapper"
-Wrapper.Size = UDim2.new(0, 640, 0, 34)
+Wrapper.Size = UDim2.new(0, 604, 0, 44)
 Wrapper.AnchorPoint = Vector2.new(0.5, 0)
-Wrapper.Position = UDim2.new(0.5, 0, 0, 8)
+Wrapper.Position = UDim2.new(0.5, 0, 0, 14)
 Wrapper.BackgroundTransparency = 1
 Wrapper.BorderSizePixel = 0
 Wrapper.Active = true
@@ -185,183 +189,547 @@ Wrapper.Draggable = false
 Wrapper.Parent = flyScreenGui
 Wrapper.Visible = false
 
+-- Outer ambient glow / shadow
+local Shadow = Instance.new("ImageLabel")
+Shadow.Name = "Shadow"
+Shadow.AnchorPoint = Vector2.new(0.5, 0.5)
+Shadow.Position = UDim2.new(0.5, 0, 0.5, 3)
+Shadow.Size = UDim2.new(1, 28, 1, 28)
+Shadow.BackgroundTransparency = 1
+Shadow.Image = "rbxassetid://1316045217"
+Shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+Shadow.ImageTransparency = 0.45
+Shadow.ScaleType = Enum.ScaleType.Slice
+Shadow.SliceCenter = Rect.new(10, 10, 118, 118)
+Shadow.ZIndex = 1
+Shadow.Parent = Wrapper
+
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(1, 0, 1, 0)
-MainFrame.BackgroundColor3 = C.bg
+MainFrame.BackgroundColor3 = Color3.fromRGB(12, 13, 19)
+MainFrame.BackgroundTransparency = 0.08
 MainFrame.BorderSizePixel = 0
+MainFrame.ZIndex = 2
 MainFrame.Parent = Wrapper
-corner(MainFrame, 12)
+corner(MainFrame, 14)
 
 local mGrad = Instance.new("UIGradient", MainFrame)
 mGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
-    ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1))
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(24, 27, 38)),
+    ColorSequenceKeypoint.new(0.25, Color3.fromRGB(14, 15, 22)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(9, 10, 14))
 })
-mGrad.Transparency = NumberSequence.new({
-    NumberSequenceKeypoint.new(0, 0.12),
-    NumberSequenceKeypoint.new(1, 0.0)
-})
+mGrad.Rotation = 90
 
-local mStroke = makeDummyStroke(MainFrame)
+local mStroke = Instance.new("UIStroke", MainFrame)
+mStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+mStroke.Color = C.accent
+mStroke.Thickness = 1.3
+mStroke.Transparency = 0.35
 
 local ButtonContainer = Instance.new("Frame")
-ButtonContainer.Size = UDim2.new(1, 0, 1, 0); ButtonContainer.BackgroundTransparency = 1; ButtonContainer.Parent = MainFrame
+ButtonContainer.Size = UDim2.new(1, 0, 1, 0)
+ButtonContainer.BackgroundTransparency = 1
+ButtonContainer.ZIndex = 3
+ButtonContainer.Parent = MainFrame
 
 local UIListLayout = Instance.new("UIListLayout")
 UIListLayout.FillDirection = Enum.FillDirection.Horizontal
 UIListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-UIListLayout.Padding = UDim.new(0, 12); UIListLayout.Parent = ButtonContainer
+UIListLayout.Padding = UDim.new(0, 8)
+UIListLayout.Parent = ButtonContainer
 
 local UIPad = Instance.new("UIPadding")
-UIPad.PaddingLeft = UDim.new(0, 14); UIPad.PaddingRight = UDim.new(0, 14); UIPad.Parent = ButtonContainer
+UIPad.PaddingLeft = UDim.new(0, 10)
+UIPad.PaddingRight = UDim.new(0, 10)
+UIPad.Parent = ButtonContainer
 
+-- ── 1. DRAG HANDLE ──
+local DragHandle = Instance.new("TextButton")
+DragHandle.Name = "DragHandle"
+DragHandle.Size = UDim2.new(0, 16, 0, 28)
+DragHandle.BackgroundTransparency = 1
+DragHandle.Text = "⋮⋮"
+DragHandle.TextColor3 = Color3.fromRGB(90, 95, 115)
+DragHandle.Font = Enum.Font.GothamBold
+DragHandle.TextSize = 14
+DragHandle.LayoutOrder = 0
+DragHandle.ZIndex = 4
+DragHandle.Parent = ButtonContainer
 
+local isDragging = false
+local dragStart, startPos
+bind(DragHandle.InputBegan, function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+        isDragging = true
+        dragStart = inp.Position
+        startPos = Wrapper.Position
+        inp.Changed:Connect(function()
+            if inp.UserInputState == Enum.UserInputState.End then isDragging = false end
+        end)
+    end
+end)
+bind(UIS.InputChanged, function(inp)
+    if isDragging and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
+        local delta = inp.Position - dragStart
+        local vp = Camera.ViewportSize
+        local newX = math.clamp(startPos.X.Offset + delta.X, -(vp.X / 2) + 310, (vp.X / 2) - 310)
+        local newY = math.clamp(startPos.Y.Offset + delta.Y, 5, vp.Y - 60)
+        Wrapper.Position = UDim2.new(startPos.X.Scale, newX, startPos.Y.Scale, newY)
+    end
+end)
+bind(DragHandle.MouseEnter, function() TweenService:Create(DragHandle, TweenInfo.new(0.15), { TextColor3 = C.accent }):Play() end)
+bind(DragHandle.MouseLeave, function() TweenService:Create(DragHandle, TweenInfo.new(0.15), { TextColor3 = Color3.fromRGB(90, 95, 115) }):Play() end)
+
+-- ── 2. BRAND & STATUS BADGE ──
 local InfoCont = Instance.new("Frame")
-InfoCont.Size = UDim2.new(0, 95, 1, 0); InfoCont.BackgroundColor3 = C.panelHdr
-InfoCont.BorderSizePixel = 0; InfoCont.LayoutOrder = 1; InfoCont.Parent = ButtonContainer
-corner(InfoCont, 10)
+InfoCont.Name = "InfoCont"
+InfoCont.Size = UDim2.new(0, 112, 0, 32)
+InfoCont.BackgroundColor3 = Color3.fromRGB(18, 20, 29)
+InfoCont.BackgroundTransparency = 0.2
+InfoCont.BorderSizePixel = 0
+InfoCont.LayoutOrder = 1
+InfoCont.ZIndex = 4
+InfoCont.Parent = ButtonContainer
+corner(InfoCont, 9)
 
-local hGrad = Instance.new("UIGradient", InfoCont)
-hGrad.Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.new(1, 1, 1))
-hGrad.Transparency = NumberSequence.new({
-    NumberSequenceKeypoint.new(0, 0.08),
-    NumberSequenceKeypoint.new(1, 0.0)
-})
+local infoStroke = Instance.new("UIStroke", InfoCont)
+infoStroke.Color = Color3.fromRGB(45, 50, 70)
+infoStroke.Thickness = 1
+infoStroke.Transparency = 0.5
+
+local PulsingDot = Instance.new("Frame")
+PulsingDot.Name = "PulsingDot"
+PulsingDot.Size = UDim2.new(0, 6, 0, 6)
+PulsingDot.Position = UDim2.new(0, 8, 0.5, -3)
+PulsingDot.BackgroundColor3 = Color3.fromRGB(34, 211, 238)
+PulsingDot.BorderSizePixel = 0
+PulsingDot.ZIndex = 5
+PulsingDot.Parent = InfoCont
+corner(PulsingDot, 99)
+
+task.spawn(function()
+    while not runtime.destroyed do
+        TweenService:Create(PulsingDot, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { BackgroundTransparency = 0.7 }):Play()
+        task.wait(0.9)
+        if runtime.destroyed then break end
+        TweenService:Create(PulsingDot, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { BackgroundTransparency = 0 }):Play()
+        task.wait(0.9)
+    end
+end)
 
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, -10, 0, 14); Title.Position = UDim2.new(0, 10, 0, 5); Title.BackgroundTransparency = 1
-Title.Text = "TL · FLY"; Title.TextColor3 = C.accent
-Title.Font = Enum.Font.GothamBold; Title.TextSize = 10; Title.TextXAlignment = Enum.TextXAlignment.Left; Title.RichText = true; Title.Parent = InfoCont
+Title.Size = UDim2.new(0, 48, 1, 0)
+Title.Position = UDim2.new(0, 18, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "TL FLY"
+Title.TextColor3 = Color3.fromRGB(240, 245, 255)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 11
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.ZIndex = 5
+Title.Parent = InfoCont
+
+local StatusBadge = Instance.new("Frame")
+StatusBadge.Name = "StatusBadge"
+StatusBadge.Size = UDim2.new(0, 40, 0, 18)
+StatusBadge.Position = UDim2.new(1, -44, 0.5, -9)
+StatusBadge.BackgroundColor3 = Color3.fromRGB(24, 30, 45)
+StatusBadge.BorderSizePixel = 0
+StatusBadge.ZIndex = 5
+StatusBadge.Parent = InfoCont
+corner(StatusBadge, 5)
 
 local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Size = UDim2.new(1, -10, 0, 12); StatusLabel.Position = UDim2.new(0, 10, 0, 19); StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "GLIDE"; StatusLabel.TextColor3 = C.sub
-StatusLabel.Font = Enum.Font.GothamBold; StatusLabel.TextSize = 10; StatusLabel.TextXAlignment = Enum.TextXAlignment.Left; StatusLabel.RichText = true; StatusLabel.Parent = InfoCont
-
+StatusLabel.Name = "StatusLabel"
+StatusLabel.Size = UDim2.new(1, 0, 1, 0)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "GLIDE"
+StatusLabel.TextColor3 = Color3.fromRGB(34, 211, 238)
+StatusLabel.Font = Enum.Font.GothamBold
+StatusLabel.TextSize = 8
+StatusLabel.ZIndex = 6
+StatusLabel.Parent = StatusBadge
 
 local function createButton(text, callback)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 100, 0, 30); btn.BackgroundColor3 = C.bg3; btn.BackgroundTransparency = 0.2
-    btn.TextColor3 = C.text; btn.Font = Enum.Font.GothamBold; btn.TextSize = 11; btn.Text = text; btn.BorderSizePixel = 0; btn.AutoButtonColor = false; btn.RichText = true
-    corner(btn, 8)
-    local popS = Instance.new("UIScale"); popS.Parent = btn
-    bind(btn.MouseEnter,
-        function() TweenService:Create(btn, TweenInfo.new(0.1),
-                { BackgroundColor3 = C.bg3, BackgroundTransparency = 0.05, TextColor3 = C.accent }):Play() end)
-    bind(btn.MouseLeave,
-        function() TweenService:Create(btn, TweenInfo.new(0.15),
-                { BackgroundColor3 = C.bg3, BackgroundTransparency = 0.2, TextColor3 = C.text }):Play() end)
-    bind(btn.MouseButton1Down,
-        function() TweenService:Create(popS, TweenInfo.new(0.08), { Scale = 0.92 }):Play() end)
-    bind(btn.MouseButton1Up,
-        function() TweenService:Create(popS,
-                TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 })
-                :Play() end)
+    btn.Size = UDim2.new(0, 100, 0, 32)
+    btn.BackgroundColor3 = Color3.fromRGB(18, 20, 29)
+    btn.BackgroundTransparency = 0.2
+    btn.TextColor3 = Color3.fromRGB(220, 230, 245)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 10
+    btn.Text = text
+    btn.BorderSizePixel = 0
+    btn.AutoButtonColor = false
+    btn.RichText = true
+    btn.ZIndex = 4
+    corner(btn, 9)
+
+    local bStroke = Instance.new("UIStroke", btn)
+    bStroke.Color = Color3.fromRGB(45, 50, 70)
+    bStroke.Thickness = 1
+    bStroke.Transparency = 0.6
+
+    local popS = Instance.new("UIScale")
+    popS.Parent = btn
+
+    bind(btn.MouseEnter, function()
+        TweenService:Create(btn, TweenInfo.new(0.12), { BackgroundTransparency = 0.05, BackgroundColor3 = Color3.fromRGB(24, 28, 40) }):Play()
+        TweenService:Create(bStroke, TweenInfo.new(0.12), { Transparency = 0.2, Color = C.accent }):Play()
+    end)
+    bind(btn.MouseLeave, function()
+        TweenService:Create(btn, TweenInfo.new(0.15), { BackgroundTransparency = 0.2, BackgroundColor3 = Color3.fromRGB(18, 20, 29) }):Play()
+        TweenService:Create(bStroke, TweenInfo.new(0.15), { Transparency = 0.6, Color = Color3.fromRGB(45, 50, 70) }):Play()
+    end)
+    bind(btn.MouseButton1Down, function()
+        TweenService:Create(popS, TweenInfo.new(0.08), { Scale = 0.94 }):Play()
+    end)
+    bind(btn.MouseButton1Up, function()
+        TweenService:Create(popS, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+    end)
     bind(btn.InputBegan, function(inp)
         if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then
             callback()
         end
     end)
-    return btn
+    return btn, bStroke
 end
 
-
+-- ── 3. SPEED CONTROLLER (with 4-Tier LEDs & [Q] Hotkey) ──
 local SpeedGroup = Instance.new("Frame")
-SpeedGroup.Size = UDim2.new(0, 130, 0, 26); SpeedGroup.BackgroundTransparency = 1; SpeedGroup.LayoutOrder = 3; SpeedGroup.Parent = ButtonContainer
-local sgL = Instance.new("UIListLayout"); sgL.FillDirection = Enum.FillDirection.Horizontal; sgL.VerticalAlignment = Enum.VerticalAlignment.Center; sgL.Padding = UDim.new(0, 4); sgL.Parent = SpeedGroup
+SpeedGroup.Size = UDim2.new(0, 134, 0, 32)
+SpeedGroup.BackgroundColor3 = Color3.fromRGB(18, 20, 29)
+SpeedGroup.BackgroundTransparency = 0.2
+SpeedGroup.BorderSizePixel = 0
+SpeedGroup.LayoutOrder = 2
+SpeedGroup.ZIndex = 4
+SpeedGroup.Parent = ButtonContainer
+corner(SpeedGroup, 9)
 
-local SpeedBtn = createButton("Speed", function()
-    speedIndex = (speedIndex % #speedLevels) + 1; hasBoosted = true; updateFlyPanel()
+local sgStroke = Instance.new("UIStroke", SpeedGroup)
+sgStroke.Color = Color3.fromRGB(45, 50, 70)
+sgStroke.Thickness = 1
+sgStroke.Transparency = 0.6
+
+local SpeedBtn = Instance.new("TextButton")
+SpeedBtn.Size = UDim2.new(1, 0, 1, 0)
+SpeedBtn.BackgroundTransparency = 1
+SpeedBtn.Text = ""
+SpeedBtn.ZIndex = 5
+SpeedBtn.Parent = SpeedGroup
+
+local SpeedBtnScale = Instance.new("UIScale", SpeedGroup)
+
+local SpeedTitle = Instance.new("TextLabel")
+SpeedTitle.Size = UDim2.new(1, -40, 0, 14)
+SpeedTitle.Position = UDim2.new(0, 10, 0, 4)
+SpeedTitle.BackgroundTransparency = 1
+SpeedTitle.Text = "NORMAL"
+SpeedTitle.TextColor3 = Color3.fromRGB(240, 245, 255)
+SpeedTitle.Font = Enum.Font.GothamBold
+SpeedTitle.TextSize = 10
+SpeedTitle.TextXAlignment = Enum.TextXAlignment.Left
+SpeedTitle.ZIndex = 5
+SpeedTitle.Parent = SpeedGroup
+
+local KeyTag = Instance.new("TextLabel")
+KeyTag.Size = UDim2.new(0, 26, 0, 14)
+KeyTag.Position = UDim2.new(1, -32, 0, 4)
+KeyTag.BackgroundTransparency = 1
+KeyTag.Text = "[Q]"
+KeyTag.TextColor3 = Color3.fromRGB(110, 115, 135)
+KeyTag.Font = Enum.Font.GothamBold
+KeyTag.TextSize = 8
+KeyTag.TextXAlignment = Enum.TextXAlignment.Right
+KeyTag.ZIndex = 5
+KeyTag.Parent = SpeedGroup
+
+local PipCont = Instance.new("Frame")
+PipCont.Size = UDim2.new(1, -20, 0, 4)
+PipCont.Position = UDim2.new(0, 10, 1, -8)
+PipCont.BackgroundTransparency = 1
+PipCont.ZIndex = 5
+PipCont.Parent = SpeedGroup
+
+local pipLayout = Instance.new("UIListLayout", PipCont)
+pipLayout.FillDirection = Enum.FillDirection.Horizontal
+pipLayout.Padding = UDim.new(0, 4)
+
+local pips = {}
+for pi = 1, 4 do
+    local pip = Instance.new("Frame")
+    pip.Size = UDim2.new(0.25, -3, 1, 0)
+    pip.BackgroundColor3 = Color3.fromRGB(40, 45, 60)
+    pip.BorderSizePixel = 0
+    pip.ZIndex = 5
+    pip.Parent = PipCont
+    corner(pip, 2)
+    pips[pi] = pip
+end
+
+bind(SpeedBtn.MouseButton1Click, function()
+    speedIndex = (speedIndex % #speedLevels) + 1
+    hasBoosted = true
+    TweenService:Create(SpeedBtnScale, TweenInfo.new(0.08), { Scale = 0.94 }):Play()
+    task.delay(0.09, function()
+        TweenService:Create(SpeedBtnScale, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+    end)
+    updateFlyPanel()
 end)
-SpeedBtn.Size = UDim2.new(0, 120, 1, 0); SpeedBtn.LayoutOrder = 1; SpeedBtn.Parent = SpeedGroup
+bind(SpeedBtn.MouseEnter, function()
+    TweenService:Create(SpeedGroup, TweenInfo.new(0.12), { BackgroundColor3 = Color3.fromRGB(24, 28, 40) }):Play()
+    TweenService:Create(sgStroke, TweenInfo.new(0.12), { Transparency = 0.2, Color = C.accent }):Play()
+end)
+bind(SpeedBtn.MouseLeave, function()
+    TweenService:Create(SpeedGroup, TweenInfo.new(0.15), { BackgroundColor3 = Color3.fromRGB(18, 20, 29) }):Play()
+    TweenService:Create(sgStroke, TweenInfo.new(0.15), { Transparency = 0.6, Color = Color3.fromRGB(45, 50, 70) }):Play()
+end)
 
-
-local NoclipBtn = createButton("NOCLIP", function()
+-- ── 4. NOCLIP SWITCH BUTTON ──
+local NoclipBtn, ncStroke = createButton("", function()
     noclipFly = not noclipFly
     updateFlyPanel()
 end)
-NoclipBtn.Size = UDim2.new(0, 85, 0, 26); NoclipBtn.LayoutOrder = 4; NoclipBtn.Parent = ButtonContainer
+NoclipBtn.Size = UDim2.new(0, 106, 0, 32)
+NoclipBtn.LayoutOrder = 3
+NoclipBtn.Parent = ButtonContainer
 
+local ncLabel = Instance.new("TextLabel")
+ncLabel.Size = UDim2.new(0, 52, 1, 0)
+ncLabel.Position = UDim2.new(0, 10, 0, 0)
+ncLabel.BackgroundTransparency = 1
+ncLabel.Text = "NOCLIP"
+ncLabel.TextColor3 = Color3.fromRGB(220, 230, 245)
+ncLabel.Font = Enum.Font.GothamBold
+ncLabel.TextSize = 10
+ncLabel.TextXAlignment = Enum.TextXAlignment.Left
+ncLabel.ZIndex = 5
+ncLabel.Parent = NoclipBtn
 
-local AnimBtn = createButton("ANIM", function() end)
-AnimBtn.Size = UDim2.new(0, 140, 0, 26); AnimBtn.LayoutOrder = 5; AnimBtn.Parent = ButtonContainer
+local NcTag = Instance.new("Frame")
+NcTag.Name = "NcTag"
+NcTag.Size = UDim2.new(0, 34, 0, 18)
+NcTag.Position = UDim2.new(1, -40, 0.5, -9)
+NcTag.BackgroundColor3 = Color3.fromRGB(26, 28, 38)
+NcTag.BorderSizePixel = 0
+NcTag.ZIndex = 5
+NcTag.Parent = NoclipBtn
+corner(NcTag, 5)
+
+local NcTagText = Instance.new("TextLabel")
+NcTagText.Size = UDim2.new(1, 0, 1, 0)
+NcTagText.BackgroundTransparency = 1
+NcTagText.Text = "OFF"
+NcTagText.TextColor3 = Color3.fromRGB(120, 125, 140)
+NcTagText.Font = Enum.Font.GothamBold
+NcTagText.TextSize = 8
+NcTagText.ZIndex = 6
+NcTagText.Parent = NcTag
+
+-- ── 5. ANIMATION STYLE DROPDOWN BUTTON ──
+local AnimBtn, animStroke = createButton("", function() end)
+AnimBtn.Size = UDim2.new(0, 136, 0, 32)
+AnimBtn.LayoutOrder = 4
+AnimBtn.Parent = ButtonContainer
+
+local AnimPrefix = Instance.new("TextLabel")
+AnimPrefix.Size = UDim2.new(0, 32, 1, 0)
+AnimPrefix.Position = UDim2.new(0, 10, 0, 0)
+AnimPrefix.BackgroundTransparency = 1
+AnimPrefix.Text = "STYLE"
+AnimPrefix.TextColor3 = Color3.fromRGB(110, 115, 135)
+AnimPrefix.Font = Enum.Font.GothamBold
+AnimPrefix.TextSize = 8
+AnimPrefix.TextXAlignment = Enum.TextXAlignment.Left
+AnimPrefix.ZIndex = 5
+AnimPrefix.Parent = AnimBtn
+
+local AnimNameLabel = Instance.new("TextLabel")
+AnimNameLabel.Name = "AnimNameLabel"
+AnimNameLabel.Size = UDim2.new(1, -60, 1, 0)
+AnimNameLabel.Position = UDim2.new(0, 44, 0, 0)
+AnimNameLabel.BackgroundTransparency = 1
+AnimNameLabel.Text = animSets[currentAnimSet].name:upper()
+AnimNameLabel.TextColor3 = Color3.fromRGB(240, 245, 255)
+AnimNameLabel.Font = Enum.Font.GothamBold
+AnimNameLabel.TextSize = 10
+AnimNameLabel.TextXAlignment = Enum.TextXAlignment.Left
+AnimNameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+AnimNameLabel.ZIndex = 5
+AnimNameLabel.Parent = AnimBtn
 
 local DropArrow = Instance.new("TextLabel")
 DropArrow.Name = "DropArrow"
-DropArrow.Size = UDim2.new(0, 16, 1, 0); DropArrow.Position = UDim2.new(1, -18, 0, 0)
-DropArrow.BackgroundTransparency = 1; DropArrow.Text = "▼"; DropArrow.TextColor3 = C.accent
-DropArrow.Font = Enum.Font.GothamBold; DropArrow.TextSize = 9; DropArrow.TextXAlignment = Enum.TextXAlignment.Center; DropArrow.Parent = AnimBtn
+DropArrow.Size = UDim2.new(0, 16, 1, 0)
+DropArrow.Position = UDim2.new(1, -22, 0, 0)
+DropArrow.BackgroundTransparency = 1
+DropArrow.Text = "▼"
+DropArrow.TextColor3 = C.accent
+DropArrow.Font = Enum.Font.GothamBold
+DropArrow.TextSize = 8
+DropArrow.ZIndex = 5
+DropArrow.Parent = AnimBtn
 
-
+-- ── 6. REAL-TIME SPEEDOMETER GAUGE ──
 local SpeedHUDReplace = Instance.new("Frame")
-SpeedHUDReplace.Size = UDim2.new(0, 110, 0, 26); SpeedHUDReplace.BackgroundTransparency = 1; SpeedHUDReplace.LayoutOrder = 6; SpeedHUDReplace.ClipsDescendants = true; SpeedHUDReplace.Parent = ButtonContainer
+SpeedHUDReplace.Size = UDim2.new(0, 118, 0, 32)
+SpeedHUDReplace.BackgroundTransparency = 1
+SpeedHUDReplace.LayoutOrder = 5
+SpeedHUDReplace.ZIndex = 4
+SpeedHUDReplace.Parent = ButtonContainer
 
 local SpeedLiveLabel = Instance.new("TextLabel")
-SpeedLiveLabel.Size = UDim2.new(1, 0, 0, 13); SpeedLiveLabel.Position = UDim2.new(0, 0, 0, 2); SpeedLiveLabel.BackgroundTransparency = 1
-SpeedLiveLabel.Text = "SPEED: 0"; SpeedLiveLabel.TextColor3 = C.text; SpeedLiveLabel.Font = Enum.Font.GothamBold; SpeedLiveLabel.TextSize = 11
-SpeedLiveLabel.TextXAlignment = Enum.TextXAlignment.Left; SpeedLiveLabel.RichText = true; SpeedLiveLabel.Parent = SpeedHUDReplace
+SpeedLiveLabel.Size = UDim2.new(1, 0, 0, 15)
+SpeedLiveLabel.Position = UDim2.new(0, 0, 0, 2)
+SpeedLiveLabel.BackgroundTransparency = 1
+SpeedLiveLabel.Text = "<font color='#FFFFFF'><b>0</b></font> <font color='#8A8A9E' size='8'>STUDS/S</font>"
+SpeedLiveLabel.TextColor3 = C.text
+SpeedLiveLabel.Font = Enum.Font.GothamBold
+SpeedLiveLabel.TextSize = 10
+SpeedLiveLabel.TextXAlignment = Enum.TextXAlignment.Left
+SpeedLiveLabel.RichText = true
+SpeedLiveLabel.ZIndex = 5
+SpeedLiveLabel.Parent = SpeedHUDReplace
 
 local SliderBg = Instance.new("Frame")
-SliderBg.Size = UDim2.new(1, 0, 0, 4); SliderBg.Position = UDim2.new(0, 0, 1, -6); SliderBg.BackgroundColor3 = Color3.fromRGB(40, 40, 45); SliderBg.BorderSizePixel = 0; SliderBg.Parent = SpeedHUDReplace; corner(SliderBg, 4)
+SliderBg.Size = UDim2.new(1, 0, 0, 5)
+SliderBg.Position = UDim2.new(0, 0, 1, -7)
+SliderBg.BackgroundColor3 = Color3.fromRGB(24, 26, 36)
+SliderBg.BorderSizePixel = 0
+SliderBg.ZIndex = 5
+SliderBg.Parent = SpeedHUDReplace
+corner(SliderBg, 3)
 
 local SliderFill = Instance.new("Frame")
-SliderFill.Size = UDim2.new(0, 0, 1, 0); SliderFill.BackgroundColor3 = C.accent; SliderFill.BorderSizePixel = 0; SliderFill.Parent = SliderBg; corner(SliderFill, 4)
+SliderFill.Size = UDim2.new(0, 0, 1, 0)
+SliderFill.BackgroundColor3 = C.accent
+SliderFill.BorderSizePixel = 0
+SliderFill.ZIndex = 6
+SliderFill.Parent = SliderBg
+corner(SliderFill, 3)
 
+local sfg = Instance.new("UIGradient", SliderFill)
+sfg.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 240, 255))
+})
 
-local PILL_EXPANDED_H, PILL_GAP = 224, 6
+-- ── 7. CLOSE / EXIT BUTTON ──
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Name = "CloseBtn"
+CloseBtn.Size = UDim2.new(0, 26, 0, 26)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(24, 26, 36)
+CloseBtn.BackgroundTransparency = 0.5
+CloseBtn.Text = "✕"
+CloseBtn.TextColor3 = Color3.fromRGB(160, 165, 185)
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.TextSize = 10
+CloseBtn.LayoutOrder = 6
+CloseBtn.BorderSizePixel = 0
+CloseBtn.AutoButtonColor = false
+CloseBtn.ZIndex = 5
+CloseBtn.Parent = ButtonContainer
+corner(CloseBtn, 7)
+
+local cbStroke = Instance.new("UIStroke", CloseBtn)
+cbStroke.Color = Color3.fromRGB(45, 50, 70)
+cbStroke.Thickness = 1
+cbStroke.Transparency = 0.7
+
+bind(CloseBtn.MouseEnter, function()
+    TweenService:Create(CloseBtn, TweenInfo.new(0.12), { BackgroundColor3 = Color3.fromRGB(239, 68, 68), BackgroundTransparency = 0.1, TextColor3 = Color3.new(1, 1, 1) }):Play()
+end)
+bind(CloseBtn.MouseLeave, function()
+    TweenService:Create(CloseBtn, TweenInfo.new(0.15), { BackgroundColor3 = Color3.fromRGB(24, 26, 36), BackgroundTransparency = 0.5, TextColor3 = Color3.fromRGB(160, 165, 185) }):Play()
+end)
+bind(CloseBtn.MouseButton1Click, function()
+    setFly(false)
+end)
+
+-- ── DROPDOWN CARD (PILL OUTER) ──
+local PILL_EXPANDED_H, PILL_GAP = 224, 8
 local dropOpen = false
 
 local PillOuter = Instance.new("Frame")
-PillOuter.Size = UDim2.new(0, 180, 0, 0)
+PillOuter.Size = UDim2.new(0, 160, 0, 0)
 PillOuter.AnchorPoint = Vector2.new(0.5, 0)
-PillOuter.Position = UDim2.new(0.5, 0, 0, 34 + PILL_GAP)
-PillOuter.BackgroundColor3 = C.bg
-PillOuter.BackgroundTransparency = 0
-PillOuter.BorderSizePixel = 0; PillOuter.ClipsDescendants = true; PillOuter.ZIndex = 50; PillOuter.Parent = Wrapper
+PillOuter.Position = UDim2.new(0, 478, 0, 44 + PILL_GAP)
+PillOuter.BackgroundColor3 = Color3.fromRGB(12, 14, 20)
+PillOuter.BackgroundTransparency = 0.05
+PillOuter.BorderSizePixel = 0
+PillOuter.ClipsDescendants = true
+PillOuter.ZIndex = 50
+PillOuter.Parent = Wrapper
 corner(PillOuter, 12)
-local pillStroke = makeDummyStroke(PillOuter); pillStroke.Transparency = 0.4
+
+local pillStroke = Instance.new("UIStroke", PillOuter)
+pillStroke.Color = C.accent
+pillStroke.Thickness = 1.2
+pillStroke.Transparency = 1
+pillStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
 local PillHdr = Instance.new("Frame", PillOuter)
-PillHdr.Size = UDim2.new(1, 0, 0, 28); PillHdr.BackgroundColor3 = C.panelHdr
-PillHdr.BackgroundTransparency = 0
-PillHdr.BorderSizePixel = 0; PillHdr.ZIndex = 51
+PillHdr.Size = UDim2.new(1, 0, 0, 28)
+PillHdr.BackgroundColor3 = Color3.fromRGB(18, 20, 29)
+PillHdr.BorderSizePixel = 0
+PillHdr.ZIndex = 51
 corner(PillHdr, 12)
-local phG = Instance.new("UIGradient", PillHdr)
-phG.Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.new(1, 1, 1))
-phG.Transparency = NumberSequence.new({
-    NumberSequenceKeypoint.new(0, 0.08),
-    NumberSequenceKeypoint.new(1, 0.0)
-})
 
 local PillTit = Instance.new("TextLabel", PillHdr)
-PillTit.Size = UDim2.new(1, -20, 1, 0); PillTit.Position = UDim2.new(0, 12, 0, 0)
-PillTit.BackgroundTransparency = 1; PillTit.Text = "SELECT STYLE"
-PillTit.TextColor3 = C.sub; PillTit.Font = Enum.Font.GothamBold; PillTit.TextSize = 9; PillTit.TextXAlignment = Enum.TextXAlignment.Left; PillTit.ZIndex = 52; PillTit.RichText = true
+PillTit.Size = UDim2.new(1, -20, 1, 0)
+PillTit.Position = UDim2.new(0, 12, 0, 0)
+PillTit.BackgroundTransparency = 1
+PillTit.Text = "FLYING STYLES"
+PillTit.TextColor3 = Color3.fromRGB(140, 150, 175)
+PillTit.Font = Enum.Font.GothamBold
+PillTit.TextSize = 9
+PillTit.TextXAlignment = Enum.TextXAlignment.Left
+PillTit.ZIndex = 52
 
 local ScrollFrame = Instance.new("ScrollingFrame")
-ScrollFrame.Size = UDim2.new(1, 0, 1, -28); ScrollFrame.Position = UDim2.new(0, 0, 0, 28); ScrollFrame.BackgroundTransparency = 1; ScrollFrame.BorderSizePixel = 0; ScrollFrame.ScrollBarThickness = 3; ScrollFrame.ScrollBarImageColor3 = C.accent; ScrollFrame.ScrollBarImageTransparency = 0.4; ScrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y; ScrollFrame.ZIndex = 51; ScrollFrame.Parent = PillOuter
-local scrollLayout = Instance.new("UIListLayout"); scrollLayout.Padding = UDim.new(0, 4); scrollLayout.Parent = ScrollFrame
-local scrollPadding = Instance.new("UIPadding"); scrollPadding.PaddingTop = UDim.new(0, 6); scrollPadding.PaddingBottom = UDim.new(0, 6); scrollPadding.PaddingLeft = UDim.new(0, 8); scrollPadding.PaddingRight = UDim.new(0, 8); scrollPadding.Parent = ScrollFrame
+ScrollFrame.Size = UDim2.new(1, 0, 1, -28)
+ScrollFrame.Position = UDim2.new(0, 0, 0, 28)
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.BorderSizePixel = 0
+ScrollFrame.ScrollBarThickness = 3
+ScrollFrame.ScrollBarImageColor3 = C.accent
+ScrollFrame.ScrollBarImageTransparency = 0.4
+ScrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+ScrollFrame.ZIndex = 51
+ScrollFrame.Parent = PillOuter
 
+local scrollLayout = Instance.new("UIListLayout")
+scrollLayout.Padding = UDim.new(0, 4)
+scrollLayout.Parent = ScrollFrame
+
+local scrollPadding = Instance.new("UIPadding")
+scrollPadding.PaddingTop = UDim.new(0, 6)
+scrollPadding.PaddingBottom = UDim.new(0, 6)
+scrollPadding.PaddingLeft = UDim.new(0, 8)
+scrollPadding.PaddingRight = UDim.new(0, 8)
+scrollPadding.Parent = ScrollFrame
 
 local function refreshAnimRows()
     for i, btn in ipairs(animSetButtons) do
         local isActive = (i == currentAnimSet)
-        TweenService:Create(btn, TweenInfo.new(0.08),
-            { BackgroundTransparency = isActive and 0.55 or 0.85 }):Play()
-        local label = btn:FindFirstChild("NameLabel"); if label then label.TextColor3 = isActive and C.accent or C.text end
-        local dot = btn:FindFirstChild("ActiveDot"); if dot then dot.Visible = isActive end
+        TweenService:Create(btn, TweenInfo.new(0.08), { BackgroundTransparency = isActive and 0.25 or 0.6 }):Play()
+        local label = btn:FindFirstChild("NameLabel")
+        if label then label.TextColor3 = isActive and C.accent or Color3.fromRGB(220, 230, 245) end
+        local dot = btn:FindFirstChild("ActiveDot")
+        if dot then dot.Visible = isActive end
     end
     local arrow = AnimBtn:FindFirstChild("DropArrow")
     if arrow then
         TweenService:Create(arrow, TweenInfo.new(0.2), { Rotation = dropOpen and 180 or 0 }):Play()
     end
-    AnimBtn.Text = animSets[currentAnimSet].name:upper()
+    if AnimNameLabel then
+        AnimNameLabel.Text = animSets[currentAnimSet].name:upper()
+    end
 end
-
 
 local flyTrack, flyFwdTrack, flyGlideTrack, flyFwd2Track = nil, nil, nil, nil
 local lastPlayedTrack = nil
@@ -377,28 +745,58 @@ local function switchAnimSet(index)
         if flyFwdTrack then flyFwdTrack:Stop(0.35); flyFwdTrack = nil end
         if flyGlideTrack then flyGlideTrack:Stop(0.35); flyGlideTrack = nil end
         local s = animSets[currentAnimSet]
-        flyTrack = loadTrackFromId(s.idle); flyFwdTrack = loadTrackFromId(s.fwd); flyGlideTrack = loadTrackFromId(s.glide)
+        flyTrack = loadTrackFromId(s.idle)
+        flyFwdTrack = loadTrackFromId(s.fwd)
+        flyGlideTrack = loadTrackFromId(s.glide)
         lastPlayedTrack = flyTrack
         if flyTrack then flyTrack:Play(0.35) end
     end
 end
 
-
 for i, set in ipairs(animSets) do
     local row = Instance.new("TextButton")
-    row.Size = UDim2.new(1, -8, 0, 34); row.BackgroundColor3 = C.bg3; row.BackgroundTransparency = 0.45; row.BorderSizePixel = 0; row.AutoButtonColor = false; row.Text = ""; row.Parent = ScrollFrame
-    corner(row, 10)
-    local nameLbl = Instance.new("TextLabel"); nameLbl.Name = "NameLabel"; nameLbl.Size = UDim2.new(1, -30, 1, 0); nameLbl.Position = UDim2.new(0, 14, 0, 0); nameLbl.BackgroundTransparency = 1; nameLbl.Text = set.name; nameLbl.TextColor3 = C.text; nameLbl.Font = Enum.Font.GothamBold; nameLbl.TextSize = 10; nameLbl.TextXAlignment = Enum.TextXAlignment.Left; nameLbl.Parent = row
-    local dot = Instance.new("Frame"); dot.Name = "ActiveDot"; dot.Size = UDim2.new(0, 5, 0, 5); dot.Position = UDim2.new(1, -12, 0.5, -2); dot.BackgroundColor3 = C.accent; dot.BorderSizePixel = 0; dot.Visible = (i == currentAnimSet); dot.Parent = row
+    row.Size = UDim2.new(1, -4, 0, 32)
+    row.BackgroundColor3 = Color3.fromRGB(20, 22, 32)
+    row.BackgroundTransparency = 0.6
+    row.BorderSizePixel = 0
+    row.AutoButtonColor = false
+    row.Text = ""
+    row.ZIndex = 53
+    row.Parent = ScrollFrame
+    corner(row, 8)
+
+    local nameLbl = Instance.new("TextLabel")
+    nameLbl.Name = "NameLabel"
+    nameLbl.Size = UDim2.new(1, -30, 1, 0)
+    nameLbl.Position = UDim2.new(0, 12, 0, 0)
+    nameLbl.BackgroundTransparency = 1
+    nameLbl.Text = set.name
+    nameLbl.TextColor3 = Color3.fromRGB(220, 230, 245)
+    nameLbl.Font = Enum.Font.GothamBold
+    nameLbl.TextSize = 10
+    nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+    nameLbl.ZIndex = 54
+    nameLbl.Parent = row
+
+    local dot = Instance.new("Frame")
+    dot.Name = "ActiveDot"
+    dot.Size = UDim2.new(0, 5, 0, 5)
+    dot.Position = UDim2.new(1, -12, 0.5, -2)
+    dot.BackgroundColor3 = C.accent
+    dot.BorderSizePixel = 0
+    dot.Visible = (i == currentAnimSet)
+    dot.ZIndex = 54
+    dot.Parent = row
     corner(dot, 99)
+
     bind(row.MouseEnter, function()
-        TweenService:Create(row, TweenInfo.new(0.1), { BackgroundTransparency = 0.2 }):Play()
+        TweenService:Create(row, TweenInfo.new(0.1), { BackgroundTransparency = 0.2, BackgroundColor3 = Color3.fromRGB(28, 32, 48) }):Play()
         if i ~= currentAnimSet then TweenService:Create(nameLbl, TweenInfo.new(0.1), { TextColor3 = C.accent }):Play() end
     end)
     bind(row.MouseLeave, function()
-        local isActive = (i == currentAnimSet); TweenService:Create(row, TweenInfo.new(0.1),
-            { BackgroundTransparency = isActive and 0.45 or 0.8 }):Play()
-        if not isActive then TweenService:Create(nameLbl, TweenInfo.new(0.1), { TextColor3 = C.text }):Play() end
+        local isActive = (i == currentAnimSet)
+        TweenService:Create(row, TweenInfo.new(0.1), { BackgroundTransparency = isActive and 0.25 or 0.6, BackgroundColor3 = Color3.fromRGB(20, 22, 32) }):Play()
+        if not isActive then TweenService:Create(nameLbl, TweenInfo.new(0.1), { TextColor3 = Color3.fromRGB(220, 230, 245) }):Play() end
     end)
     bind(row.InputBegan, function(inp)
         if inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -408,10 +806,7 @@ for i, set in ipairs(animSets) do
     animSetButtons[i] = row
 end
 
-
-AnimBtn.Text = animSets[currentAnimSet].name:upper()
 refreshAnimRows()
-
 
 bind(AnimBtn.MouseButton1Click, function()
     dropOpen = not dropOpen
@@ -421,34 +816,73 @@ bind(AnimBtn.MouseButton1Click, function()
             { Rotation = dropOpen and 180 or 0 }):Play()
     end
     local targetH = dropOpen and PILL_EXPANDED_H or 0
-    local targetT = dropOpen and 0.1 or 1
+    local targetT = dropOpen and 0.05 or 1
     TweenService:Create(PillOuter, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
         {
-            Size = UDim2.new(0, 150, 0, targetH),
+            Size = UDim2.new(0, 160, 0, targetH),
             BackgroundTransparency = targetT
         }):Play()
     if pillStroke then
-        TweenService:Create(pillStroke, TweenInfo.new(0.3), { Transparency = dropOpen and 0.55 or 1 }):Play()
+        TweenService:Create(pillStroke, TweenInfo.new(0.3), { Transparency = dropOpen and 0.4 or 1 }):Play()
     end
 end)
-
 
 updateFlyPanel = function()
     local data = getSpeedData(speedIndex)
     if not data then return end
-    if SpeedBtn then SpeedBtn.Text = data.name end
-    StatusLabel.Text = data.name
-    TweenService:Create(mStroke, TweenInfo.new(0.2), { Color = data.color }):Play()
-    TweenService:Create(pillStroke, TweenInfo.new(0.2), { Color = data.color }):Play()
-    if SliderFill then TweenService:Create(SliderFill, TweenInfo.new(0.15),
-            { Size = UDim2.new(data.bar, 0, 1, 0), BackgroundColor3 = data.color }):Play() end
-    if NoclipBtn then
-        NoclipBtn.Text = noclipFly and "NOCLIP  ON" or "NOCLIP"
-        TweenService:Create(NoclipBtn, TweenInfo.new(0.2),
-            { TextColor3 = noclipFly and C.accent or C.text, BackgroundTransparency = noclipFly and 0.05 or 0.2 }):Play()
+    
+    if SpeedTitle then SpeedTitle.Text = data.name end
+    if StatusLabel then
+        StatusLabel.Text = data.name
+        StatusLabel.TextColor3 = data.color
     end
+    if StatusBadge then
+        TweenService:Create(StatusBadge, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(
+            math.floor(data.color.R * 40),
+            math.floor(data.color.G * 40),
+            math.floor(data.color.B * 40)
+        ) }):Play()
+    end
+    
+    for pi = 1, 4 do
+        local pip = pips[pi]
+        if pip then
+            local isLit = (pi <= speedIndex)
+            TweenService:Create(pip, TweenInfo.new(0.18), {
+                BackgroundColor3 = isLit and data.color or Color3.fromRGB(40, 45, 60),
+                BackgroundTransparency = isLit and 0.0 or 0.5
+            }):Play()
+        end
+    end
+    
+    TweenService:Create(mStroke, TweenInfo.new(0.25), { Color = data.color }):Play()
+    TweenService:Create(pillStroke, TweenInfo.new(0.25), { Color = data.color }):Play()
+    
+    if SliderFill then
+        TweenService:Create(SliderFill, TweenInfo.new(0.15), { BackgroundColor3 = data.color }):Play()
+    end
+
+    if NoclipBtn and NcTag and NcTagText then
+        if noclipFly then
+            NcTagText.Text = "ON"
+            NcTagText.TextColor3 = Color3.fromRGB(34, 211, 238)
+            TweenService:Create(NcTag, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(15, 45, 55) }):Play()
+            TweenService:Create(ncStroke, TweenInfo.new(0.2), { Color = Color3.fromRGB(34, 211, 238), Transparency = 0.3 }):Play()
+        else
+            NcTagText.Text = "OFF"
+            NcTagText.TextColor3 = Color3.fromRGB(120, 125, 140)
+            TweenService:Create(NcTag, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(26, 28, 38) }):Play()
+            TweenService:Create(ncStroke, TweenInfo.new(0.2), { Color = Color3.fromRGB(45, 50, 70), Transparency = 0.6 }):Play()
+        end
+    end
+
     if speedIndex == 4 and flying then
-        local flash = regInst(Instance.new("Frame", flyScreenGui)); flash.Size = UDim2.new(1, 0, 1, 0); flash.BackgroundColor3 = Color3.new(1, 1, 1); flash.BackgroundTransparency = 0.9; TweenService:Create(flash, TweenInfo.new(0.2), { BackgroundTransparency = 1 }):Play(); task.delay(0.2, function() flash:Destroy() end)
+        local flash = regInst(Instance.new("Frame", flyScreenGui))
+        flash.Size = UDim2.new(1, 0, 1, 0)
+        flash.BackgroundColor3 = Color3.new(1, 1, 1)
+        flash.BackgroundTransparency = 0.9
+        TweenService:Create(flash, TweenInfo.new(0.2), { BackgroundTransparency = 1 }):Play()
+        task.delay(0.2, function() flash:Destroy() end)
     end
 end
 
@@ -749,9 +1183,12 @@ local function startFly()
         
         
         if SpeedLiveLabel then
-            SpeedLiveLabel.Text = string.format("SPEED: %d  (%.0f%%)",
-                math.floor(_currentSpeedMag + 0.5),
-                math.clamp(_currentSpeedMag / math.max(_currentMaxSpeed, 1), 0, 1) * 100)
+            SpeedLiveLabel.Text = string.format("<font color='#FFFFFF'><b>%d</b></font> <font color='#8A8A9E' size='8'>STUDS/S</font>",
+                math.floor(_currentSpeedMag + 0.5))
+        end
+        if SliderFill then
+            local pct = math.clamp(_currentSpeedMag / math.max(_currentMaxSpeed, 1), 0, 1)
+            SliderFill.Size = UDim2.new(pct, 0, 1, 0)
         end
 
         
@@ -865,6 +1302,14 @@ local function setFly(on)
             flying    = false
             flyActive = false
             stopFly()
+            if dropOpen then
+                dropOpen = false
+                PillOuter.Size = UDim2.new(0, 160, 0, 0)
+                PillOuter.BackgroundTransparency = 1
+                if pillStroke then pillStroke.Transparency = 1 end
+                local arrow = AnimBtn:FindFirstChild("DropArrow")
+                if arrow then arrow.Rotation = 0 end
+            end
             if Wrapper then Wrapper.Visible = false end
         end
     end
