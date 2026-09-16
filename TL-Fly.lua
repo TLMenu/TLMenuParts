@@ -173,9 +173,9 @@ flyScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 flyScreenGui.ResetOnSpawn   = false
 
 
--- ════════════════════════════════════════════════════════════════
+-- ================================================================
 --  MODERN FLOATING CYBER-GLASS FLY HUD BAR
--- ════════════════════════════════════════════════════════════════
+-- ================================================================
 
 local Wrapper = Instance.new("Frame")
 Wrapper.Name = "Wrapper"
@@ -247,18 +247,33 @@ UIPad.PaddingLeft = UDim.new(0, 10)
 UIPad.PaddingRight = UDim.new(0, 10)
 UIPad.Parent = ButtonContainer
 
--- ── 1. DRAG HANDLE ──
+-- -- 1. DRAG HANDLE --
 local DragHandle = Instance.new("TextButton")
 DragHandle.Name = "DragHandle"
-DragHandle.Size = UDim2.new(0, 16, 0, 28)
+DragHandle.Size = UDim2.new(0, 14, 0, 26)
 DragHandle.BackgroundTransparency = 1
-DragHandle.Text = "⋮⋮"
-DragHandle.TextColor3 = Color3.fromRGB(90, 95, 115)
-DragHandle.Font = Enum.Font.GothamBold
-DragHandle.TextSize = 14
+DragHandle.Text = ""
 DragHandle.LayoutOrder = 0
 DragHandle.ZIndex = 4
 DragHandle.Parent = ButtonContainer
+
+local gripBar1 = Instance.new("Frame", DragHandle)
+gripBar1.Name = "GripBar1"
+gripBar1.Size = UDim2.new(0, 2, 0, 14)
+gripBar1.Position = UDim2.new(0.5, -3, 0.5, -7)
+gripBar1.BackgroundColor3 = Color3.fromRGB(80, 85, 105)
+gripBar1.BorderSizePixel = 0
+gripBar1.ZIndex = 5
+corner(gripBar1, 1)
+
+local gripBar2 = Instance.new("Frame", DragHandle)
+gripBar2.Name = "GripBar2"
+gripBar2.Size = UDim2.new(0, 2, 0, 14)
+gripBar2.Position = UDim2.new(0.5, 1, 0.5, -7)
+gripBar2.BackgroundColor3 = Color3.fromRGB(80, 85, 105)
+gripBar2.BorderSizePixel = 0
+gripBar2.ZIndex = 5
+corner(gripBar2, 1)
 
 local isDragging = false
 local dragStart, startPos
@@ -276,15 +291,21 @@ bind(UIS.InputChanged, function(inp)
     if isDragging and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
         local delta = inp.Position - dragStart
         local vp = Camera.ViewportSize
-        local newX = math.clamp(startPos.X.Offset + delta.X, -(vp.X / 2) + 310, (vp.X / 2) - 310)
+        local newX = math.clamp(startPos.X.Offset + delta.X, -(vp.X / 2) + 300, (vp.X / 2) - 300)
         local newY = math.clamp(startPos.Y.Offset + delta.Y, 5, vp.Y - 60)
         Wrapper.Position = UDim2.new(startPos.X.Scale, newX, startPos.Y.Scale, newY)
     end
 end)
-bind(DragHandle.MouseEnter, function() TweenService:Create(DragHandle, TweenInfo.new(0.15), { TextColor3 = C.accent }):Play() end)
-bind(DragHandle.MouseLeave, function() TweenService:Create(DragHandle, TweenInfo.new(0.15), { TextColor3 = Color3.fromRGB(90, 95, 115) }):Play() end)
+bind(DragHandle.MouseEnter, function()
+    TweenService:Create(gripBar1, TweenInfo.new(0.15), { BackgroundColor3 = C.accent }):Play()
+    TweenService:Create(gripBar2, TweenInfo.new(0.15), { BackgroundColor3 = C.accent }):Play()
+end)
+bind(DragHandle.MouseLeave, function()
+    TweenService:Create(gripBar1, TweenInfo.new(0.15), { BackgroundColor3 = Color3.fromRGB(80, 85, 105) }):Play()
+    TweenService:Create(gripBar2, TweenInfo.new(0.15), { BackgroundColor3 = Color3.fromRGB(80, 85, 105) }):Play()
+end)
 
--- ── 2. BRAND & STATUS BADGE ──
+-- -- 2. BRAND & STATUS BADGE --
 local InfoCont = Instance.new("Frame")
 InfoCont.Name = "InfoCont"
 InfoCont.Size = UDim2.new(0, 112, 0, 32)
@@ -399,7 +420,7 @@ local function createButton(text, callback)
     return btn, bStroke
 end
 
--- ── 3. SPEED CONTROLLER (with 4-Tier LEDs & [Q] Hotkey) ──
+-- -- 3. SPEED CONTROLLER (with 4-Tier LEDs & [Q] Hotkey) --
 local SpeedGroup = Instance.new("Frame")
 SpeedGroup.Size = UDim2.new(0, 134, 0, 32)
 SpeedGroup.BackgroundColor3 = Color3.fromRGB(18, 20, 29)
@@ -489,7 +510,7 @@ bind(SpeedBtn.MouseLeave, function()
     TweenService:Create(sgStroke, TweenInfo.new(0.15), { Transparency = 0.6, Color = Color3.fromRGB(45, 50, 70) }):Play()
 end)
 
--- ── 4. NOCLIP SWITCH BUTTON ──
+-- -- 4. NOCLIP SWITCH BUTTON --
 local NoclipBtn, ncStroke = createButton("", function()
     noclipFly = not noclipFly
     updateFlyPanel()
@@ -530,7 +551,7 @@ NcTagText.TextSize = 8
 NcTagText.ZIndex = 6
 NcTagText.Parent = NcTag
 
--- ── 5. ANIMATION STYLE DROPDOWN BUTTON ──
+-- -- 5. ANIMATION STYLE DROPDOWN BUTTON --
 local AnimBtn, animStroke = createButton("", function() end)
 AnimBtn.Size = UDim2.new(0, 136, 0, 32)
 AnimBtn.LayoutOrder = 4
@@ -564,17 +585,18 @@ AnimNameLabel.Parent = AnimBtn
 
 local DropArrow = Instance.new("TextLabel")
 DropArrow.Name = "DropArrow"
-DropArrow.Size = UDim2.new(0, 16, 1, 0)
-DropArrow.Position = UDim2.new(1, -22, 0, 0)
+DropArrow.AnchorPoint = Vector2.new(0.5, 0.5)
+DropArrow.Size = UDim2.new(0, 14, 0, 14)
+DropArrow.Position = UDim2.new(1, -12, 0.5, 0)
 DropArrow.BackgroundTransparency = 1
-DropArrow.Text = "▼"
+DropArrow.Text = "v"
 DropArrow.TextColor3 = C.accent
 DropArrow.Font = Enum.Font.GothamBold
-DropArrow.TextSize = 8
+DropArrow.TextSize = 10
 DropArrow.ZIndex = 5
 DropArrow.Parent = AnimBtn
 
--- ── 6. REAL-TIME SPEEDOMETER GAUGE ──
+-- -- 6. REAL-TIME SPEEDOMETER GAUGE --
 local SpeedHUDReplace = Instance.new("Frame")
 SpeedHUDReplace.Size = UDim2.new(0, 118, 0, 32)
 SpeedHUDReplace.BackgroundTransparency = 1
@@ -600,6 +622,7 @@ SliderBg.Size = UDim2.new(1, 0, 0, 5)
 SliderBg.Position = UDim2.new(0, 0, 1, -7)
 SliderBg.BackgroundColor3 = Color3.fromRGB(24, 26, 36)
 SliderBg.BorderSizePixel = 0
+SliderBg.ClipsDescendants = true
 SliderBg.ZIndex = 5
 SliderBg.Parent = SpeedHUDReplace
 corner(SliderBg, 3)
@@ -618,16 +641,16 @@ sfg.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 240, 255))
 })
 
--- ── 7. CLOSE / EXIT BUTTON ──
+-- -- 7. CLOSE / EXIT BUTTON --
 local CloseBtn = Instance.new("TextButton")
 CloseBtn.Name = "CloseBtn"
 CloseBtn.Size = UDim2.new(0, 26, 0, 26)
 CloseBtn.BackgroundColor3 = Color3.fromRGB(24, 26, 36)
 CloseBtn.BackgroundTransparency = 0.5
-CloseBtn.Text = "✕"
+CloseBtn.Text = "X"
 CloseBtn.TextColor3 = Color3.fromRGB(160, 165, 185)
 CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.TextSize = 10
+CloseBtn.TextSize = 11
 CloseBtn.LayoutOrder = 6
 CloseBtn.BorderSizePixel = 0
 CloseBtn.AutoButtonColor = false
@@ -650,7 +673,7 @@ bind(CloseBtn.MouseButton1Click, function()
     setFly(false)
 end)
 
--- ── DROPDOWN CARD (PILL OUTER) ──
+-- -- DROPDOWN CARD (PILL OUTER) --
 local PILL_EXPANDED_H, PILL_GAP = 224, 8
 local dropOpen = false
 
