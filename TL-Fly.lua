@@ -189,21 +189,6 @@ Wrapper.Draggable = false
 Wrapper.Parent = flyScreenGui
 Wrapper.Visible = false
 
--- Outer ambient glow / shadow
-local Shadow = Instance.new("ImageLabel")
-Shadow.Name = "Shadow"
-Shadow.Position = UDim2.new(0, -12, 0, -10)
-Shadow.Size = UDim2.new(1, 24, 1, 24)
-Shadow.BackgroundTransparency = 1
-Shadow.BorderSizePixel = 0
-Shadow.Image = "rbxassetid://1316045217"
-Shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
-Shadow.ImageTransparency = 0.65
-Shadow.ScaleType = Enum.ScaleType.Slice
-Shadow.SliceCenter = Rect.new(15, 15, 113, 113)
-Shadow.ZIndex = 1
-Shadow.Parent = Wrapper
-
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(1, 0, 1, 0)
@@ -276,24 +261,42 @@ gripBar2.ZIndex = 5
 corner(gripBar2, 1)
 
 local isDragging = false
-local dragStart, startPos
-bind(DragHandle.InputBegan, function(inp)
+local dragStart = Vector3.zero
+local startPos = Wrapper.Position
+local targetPos = Wrapper.Position
+
+local function startDrag(inp)
     if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
         isDragging = true
         dragStart = inp.Position
         startPos = Wrapper.Position
-        inp.Changed:Connect(function()
-            if inp.UserInputState == Enum.UserInputState.End then isDragging = false end
-        end)
+        targetPos = Wrapper.Position
     end
-end)
+end
+
+bind(DragHandle.InputBegan, startDrag)
+bind(MainFrame.InputBegan, startDrag)
+
 bind(UIS.InputChanged, function(inp)
     if isDragging and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
         local delta = inp.Position - dragStart
         local vp = Camera.ViewportSize
-        local newX = math.clamp(startPos.X.Offset + delta.X, -(vp.X / 2) + 300, (vp.X / 2) - 300)
+        local newX = math.clamp(startPos.X.Offset + delta.X, -(vp.X / 2) + 310, (vp.X / 2) - 310)
         local newY = math.clamp(startPos.Y.Offset + delta.Y, 5, vp.Y - 60)
-        Wrapper.Position = UDim2.new(startPos.X.Scale, newX, startPos.Y.Scale, newY)
+        targetPos = UDim2.new(startPos.X.Scale, newX, startPos.Y.Scale, newY)
+    end
+end)
+
+bind(UIS.InputEnded, function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+        isDragging = false
+    end
+end)
+
+bind(RunService.RenderStepped, function(dt)
+    if isDragging or (Wrapper.Position.X.Offset ~= targetPos.X.Offset or Wrapper.Position.Y.Offset ~= targetPos.Y.Offset) then
+        local factor = math.clamp(1 - math.exp(-28 * dt), 0, 1)
+        Wrapper.Position = Wrapper.Position:Lerp(targetPos, factor)
     end
 end)
 bind(DragHandle.MouseEnter, function()
