@@ -128,6 +128,34 @@ function NametagSystem.Init(ctx)
     local customUserAvatars = ctx.customUserAvatars or {}
     local CoreGui = game:GetService("CoreGui")
 
+    local function _getGuiContainer()
+        if typeof(gethui) == "function" then
+            local ok, h = pcall(gethui)
+            if ok and h then return h end
+        end
+        local okC, cg = pcall(function() return game:GetService("CoreGui") end)
+        if okC and cg then
+            local okTest, _ = pcall(function() return cg:GetChildren() end)
+            if okTest then return cg end
+        end
+        local lp = LocalPlayer or _SvcPlr.LocalPlayer
+        if lp then
+            local pg = lp:FindFirstChildOfClass("PlayerGui") or lp:FindFirstChild("PlayerGui")
+            if pg then return pg end
+        end
+        return CoreGui
+    end
+
+    local function _findExistingBillboard(pName)
+        local c = _getGuiContainer()
+        local b = c and c:FindFirstChild("CovertPeerTag_" .. pName)
+        if not b and LocalPlayer then
+            local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+            if pg then b = pg:FindFirstChild("CovertPeerTag_" .. pName) end
+        end
+        return b
+    end
+
     local function _NT_safeFont(fontName, fallback)
         fallback = fallback or Enum.Font.SourceSans
         if not fontName then return fallback end
@@ -1050,6 +1078,7 @@ end
     local function DoesPlayerQualifyForNametag(p)
         if not _NT_CONFIG or not _NT_CONFIG.enabled then return false end
         if not p then return false end
+        local lp = LocalPlayer or _SvcPlr.LocalPlayer
         local pObj = nil
         local pName = ""
         local pUserId = ""
@@ -1067,12 +1096,13 @@ end
 
         local tgt = _NT_CONFIG.targetUser
         if type(tgt) == "string" and tgt ~= "" then
-            if pObj and pObj == LocalPlayer then return true end
+            if (lp and pName:lower() == lp.Name:lower()) or (pObj and lp and pObj == lp) then return true end
             if pName:lower() == tgt:lower() then return true end
             return false
         end
 
-        if pObj and pObj == LocalPlayer then return true end
+        -- LocalPlayer ALWAYS qualifies for their own nametag (unless removed via settings)
+        if (lp and pName:lower() == lp.Name:lower()) or (pObj and lp and pObj == lp) then return true end
 
         local State = ctx.State or rawget(_genv, "State") or {}
         if State and State.VerifiedPeers and pObj and State.VerifiedPeers[pObj] ~= nil then return true end
@@ -1101,25 +1131,28 @@ end
         if not character then return end
         if not playerName or playerName == "" then return end
 
-        -- STRICT QUALIFICATION FILTER: Normal players NEVER receive an overhead nametag!
+        local lp = LocalPlayer or _SvcPlr.LocalPlayer
         local pObj = _SvcPlr:FindFirstChild(playerName)
+        local isLocal = (lp and playerName:lower() == lp.Name:lower()) or (pObj and lp and pObj == lp)
+
+        -- STRICT QUALIFICATION FILTER: Normal players NEVER receive an overhead nametag!
         if not DoesPlayerQualifyForNametag(pObj or playerName) then
-            local existing = CoreGui:FindFirstChild("CovertPeerTag_" .. playerName)
+            local existing = _findExistingBillboard(playerName)
             if existing then pcall(function() existing:Destroy() end) end
             return
         end
 
         -- Check local player remove nametag option
-        if pObj == LocalPlayer and (_NT_CONFIG.removeOwnNametag or (ctx.settingsState and ctx.settingsState.removeNametag)) then
-            local existing = CoreGui:FindFirstChild("CovertPeerTag_" .. playerName)
+        if isLocal and (_NT_CONFIG.removeOwnNametag or (ctx.settingsState and ctx.settingsState.removeNametag)) then
+            local existing = _findExistingBillboard(playerName)
             if existing then pcall(function() existing:Destroy() end) end
             return
         end
 
         -- Check peer nametag visibility
         local State = ctx.State or rawget(_genv, "State") or {}
-        if pObj ~= LocalPlayer and State and State.NametagVisibility and State.NametagVisibility[pObj] == false and not isAdmin then
-            local existing = CoreGui:FindFirstChild("CovertPeerTag_" .. playerName)
+        if not isLocal and State and State.NametagVisibility and pObj and State.NametagVisibility[pObj] == false and not isAdmin then
+            local existing = _findExistingBillboard(playerName)
             if existing then pcall(function() existing:Destroy() end) end
             return
         end
@@ -1237,9 +1270,9 @@ end
                         creatingNametag[playerName] = nil; return
                     end
 
-                    local guiParentBB = CoreGui
-                    local existingBB  = guiParentBB:FindFirstChild("CovertPeerTag_" .. playerName)
-                    if existingBB then existingBB:Destroy() end
+                    local guiParentBB = _getGuiContainer()
+                    local existingBB  = _findExistingBillboard(playerName)
+                    if existingBB then pcall(function() existingBB:Destroy() end) end
 
                     local billboard             = Instance.new("BillboardGui")
                     billboard.Name              = "CovertPeerTag_" .. playerName
@@ -1580,25 +1613,29 @@ end
     local function RemoveNametag(playerOrName)
         local pName = type(playerOrName) == "string" and playerOrName or (playerOrName and playerOrName.Name) or ""
         if pName == "" then return end
-        local existing = CoreGui:FindFirstChild("CovertPeerTag_" .. pName)
+        local existing = _findExistingBillboard(pName)
         if existing then pcall(function() existing:Destroy() end) end
         creatingNametag[pName] = nil
     end
 
     local function RemoveAll()
-        for _, desc in ipairs(CoreGui:GetDescendants()) do
-            if desc:IsA("BillboardGui") and desc.Name:sub(1, 14) == "CovertPeerTag_" then
-                pcall(function() desc:Destroy() end)
+        local container = _getGuiContainer()
+        if container then
+            for _, desc in ipairs(container:GetDescendants()) do
+                if desc:IsA("BillboardGui") and desc.Name:sub(1, 14) == "CovertPeerTag_" then
+                    pcall(function() desc:Destroy() end)
+                end
             end
         end
     end
 
     local function UpdateAll()
+        local lp = LocalPlayer or _SvcPlr.LocalPlayer
         for _, p in ipairs(_SvcPlr:GetPlayers()) do
             local char = p.Character
             if char and char.Parent then
                 if DoesPlayerQualifyForNametag(p) then
-                    local isAdm = (p == LocalPlayer and (ctx.IsLocalAdmin or AdminNames[p.Name] == true))
+                    local isAdm = (lp and p == lp and (ctx.IsLocalAdmin or AdminNames[p.Name] == true))
                         or (AdminNames[p.Name] == true) or (AdminNames[tostring(p.UserId)] == true)
                     task.spawn(CreateCustomNametag, char, p.Name, isAdm)
                 else
@@ -1634,7 +1671,7 @@ end
     end
 
     -- Initial creation for existing qualified players
-    task.delay(1, UpdateAll)
+    task.delay(0.5, UpdateAll)
 
     -- Export module functions
     NametagSystem.CreateNametag = CreateCustomNametag
