@@ -1,15 +1,4 @@
--- ════════════════════════════════════════════════════════════════
---  TL-Invisible.lua (TLMenu Module)
---  Client-Clone Server-Side Invisibility System
--- ════════════════════════════════════════════════════════════════
-
-local Players = game:GetService("Players")
-local Lighting = game:GetService("Lighting")
-local RunService = game:GetService("RunService")
-
-local Player = Players.LocalPlayer
-
--- Global runtime tracking for clean TLMenu unloads
+-- Environment & Runtime Lifecycle
 local GLOBAL_ENV = (typeof(getgenv) == "function" and getgenv()) or _G
 local RUNTIME_KEY = "__TL_InvisRuntime"
 
@@ -20,253 +9,306 @@ if GLOBAL_ENV then
 	end
 end
 
-local invisRunning = false
-local IsInvis = false
-local RealCharacter = nil
-local InvisibleCharacter = nil
-local invisFixConnection = nil
-local invisDiedConnection = nil
+local runtime = {
+	connections = {},
+	instances = {},
+	destroyed = false
+}
 
-local function setupParts()
-	pcall(function()
-		local ch = InvisibleCharacter or (IsInvis and Player.Character)
-		if not ch then return end
-		for _, v in ipairs(ch:GetDescendants()) do
-			if v:IsA("BasePart") then
-				if v.Name == "HumanoidRootPart" then
-					v.Transparency = 1
-				else
-					v.Transparency = 0.5
-				end
+local function bind(sig, fn)
+	local c = sig:Connect(fn)
+	table.insert(runtime.connections, c)
+	return c
+end
+
+-- Services
+local Players    = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS        = game:GetService("UserInputService")
+
+local lp = Players.LocalPlayer
+
+-- Configuration
+local Config = {
+	ToggleKey = Enum.KeyCode.G,
+	TeleportY = -200000,
+	PartTransparency = 0.99,
+	HighlightFill = Color3.fromRGB(220, 235, 255),
+	HighlightOutline = Color3.fromRGB(255, 255, 255)
+}
+
+local _hasRenderStepped = pcall(function()
+	local c = RunService.RenderStepped:Connect(function() end)
+	c:Disconnect()
+end)
+
+-- State
+local invisActive      = false
+local invisParts       = {}
+local invisHeartConn   = nil
+local _invisHealthConn = nil
+local _invisHL         = nil
+local _invisSavedCF    = nil
+local _invGhostConn    = nil
+
+-- Visuals
+local function makeInvisSelfHL(ch)
+	local PlayerGui = lp:FindFirstChild("PlayerGui")
+	if not PlayerGui then return nil end
+
+	local ok, hl = pcall(function()
+		local h               = Instance.new("Highlight")
+		h.Adornee             = ch
+		h.FillColor           = Config.HighlightFill
+		h.OutlineColor        = Config.HighlightOutline
+		h.FillTransparency    = 0.85
+		h.OutlineTransparency = 1.0
+		h.DepthMode           = Enum.HighlightDepthMode.AlwaysOnTop
+		h.Parent              = PlayerGui
+		return h
+	end)
+	if ok and hl and hl.Parent then return hl end
+
+	local ok2, sb = pcall(function()
+		local s               = Instance.new("SelectionBox")
+		s.Adornee             = ch:FindFirstChild("HumanoidRootPart") or ch
+		s.Color3              = Config.HighlightOutline
+		s.LineThickness       = 0.0
+		s.SurfaceTransparency = 0.85
+		s.SurfaceColor3       = Config.HighlightFill
+		s.Parent              = PlayerGui
+		return s
+	end)
+	if ok2 and sb and sb.Parent then return sb end
+
+	return nil
+end
+
+-- Core Logic
+local function invisSetupParts()
+	invisParts = {}
+	local ch = lp.Character
+	if not ch then return end
+	for _, d in ipairs(ch:GetDescendants()) do
+		if d:IsA("BasePart") and d.Transparency < 0.9 then
+			table.insert(invisParts, { part = d, origTransp = d.Transparency })
+		end
+	end
+end
+
+local function startInvisHeartbeat()
+	local cachedChar = lp.Character
+	local cachedHum  = cachedChar and cachedChar:FindFirstChildOfClass("Humanoid")
+	local cachedRoot = cachedChar and cachedChar:FindFirstChild("HumanoidRootPart")
+
+	invisHeartConn = RunService.Heartbeat:Connect(function()
+		local c = lp.Character
+		if c ~= cachedChar then
+			cachedChar = c
+			cachedHum  = c and c:FindFirstChildOfClass("Humanoid")
+			cachedRoot = c and c:FindFirstChild("HumanoidRootPart")
+		end
+
+		local h = cachedHum
+		local r = cachedRoot
+		if not (invisActive and h and r) then return end
+
+		if h.Health <= 0 or not c.Parent then
+			pcall(function() h.CameraOffset = Vector3.zero end)
+			return
+		end
+
+		for _, entry in ipairs(invisParts) do
+			local part = entry.part
+			if part and part.Parent and part.Transparency < 0.98 then
+				part.Transparency = Config.PartTransparency
 			end
 		end
+
+		local curCF = r.CFrame
+		if curCF.Position.Y > (Config.TeleportY / 2) then
+			_invisSavedCF = curCF
+		end
+
+		local origOff = Vector3.zero
+		pcall(function() origOff = h.CameraOffset end)
+
+		pcall(function()
+			r.CFrame       = CFrame.new(curCF.Position.X, Config.TeleportY, curCF.Position.Z)
+			h.CameraOffset = Vector3.new(0, curCF.Position.Y - Config.TeleportY, 0)
+		end)
+
+		task.spawn(function()
+			if _hasRenderStepped then
+				pcall(function() RunService.RenderStepped:Wait() end)
+			else
+				task.wait()
+			end
+			pcall(function()
+				r.CFrame       = curCF
+				h.CameraOffset = origOff
+			end)
+		end)
 	end)
 end
 
-local function Respawn()
-	pcall(function()
-		if invisFixConnection then invisFixConnection:Disconnect(); invisFixConnection = nil end
-		if invisDiedConnection then invisDiedConnection:Disconnect(); invisDiedConnection = nil end
+local function setInvis(on)
+	invisActive = on
 
-		if RealCharacter and RealCharacter.Parent then
-			Player.Character = RealCharacter
-			task.wait()
-			RealCharacter.Parent = workspace
-			local hum = RealCharacter:FindFirstChildWhichIsA("Humanoid")
-			if hum then
-				hum:Destroy()
+	if _invGhostConn then _invGhostConn:Disconnect(); _invGhostConn = nil end
+	if invisHeartConn then pcall(function() invisHeartConn:Disconnect() end); invisHeartConn = nil end
+	if _invisHealthConn then pcall(function() _invisHealthConn:Disconnect() end); _invisHealthConn = nil end
+	if _invisHL and _invisHL.Parent then pcall(function() _invisHL:Destroy() end); _invisHL = nil end
+
+	local ch   = lp.Character
+	local hum  = ch and ch:FindFirstChildOfClass("Humanoid")
+	local root = ch and ch:FindFirstChild("HumanoidRootPart")
+
+	if not on then
+		if root and _invisSavedCF then
+			pcall(function()
+				root.CFrame = _invisSavedCF
+				root.AssemblyLinearVelocity = Vector3.zero
+			end)
+		end
+		if hum then
+			pcall(function() hum.CameraOffset = Vector3.zero end)
+		end
+
+		task.spawn(function()
+			task.wait(0.05)
+			for _, entry in ipairs(invisParts) do
+				local part = entry.part
+				if part and part.Parent then
+					part.Transparency = entry.origTransp
+				end
 			end
-		end
+			invisParts = {}
+			_invisSavedCF = nil
+		end)
+		return
+	end
 
-		if InvisibleCharacter and InvisibleCharacter.Parent then
-			InvisibleCharacter:Destroy()
+	if not ch then return end
+	invisSetupParts()
+	_invisHL = makeInvisSelfHL(ch)
+
+	if hum then
+		pcall(function()
+			_invisHealthConn = hum:GetPropertyChangedSignal("Health"):Connect(function()
+				if not invisActive then return end
+				local h2 = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
+				if h2 and h2.Health < h2.MaxHealth then
+					pcall(function() h2.Health = h2.MaxHealth end)
+				end
+			end)
+		end)
+	end
+
+	local initCF = root and root.CFrame
+	if initCF then _invisSavedCF = initCF end
+
+	task.spawn(function()
+		if not invisActive then return end
+
+		for _, entry in ipairs(invisParts) do
+			local p = entry.part
+			if p and p.Parent then p.Transparency = Config.PartTransparency end
 		end
-		InvisibleCharacter = nil
-		IsInvis = false
-		invisRunning = false
+		startInvisHeartbeat()
 	end)
 end
 
 local function start()
-	if invisRunning or IsInvis then return end
-	invisRunning = true
-
-	local ch = Player.Character or Player.CharacterAdded:Wait()
-	if not ch then
-		invisRunning = false
-		return
-	end
-
-	RealCharacter = ch
-	RealCharacter.Archivable = true
-
-	local okClone, clone = pcall(function() return RealCharacter:Clone() end)
-	if not (okClone and clone) then
-		invisRunning = false
-		return
-	end
-
-	InvisibleCharacter = clone
-	InvisibleCharacter.Name = ""
-	pcall(function() InvisibleCharacter.Parent = Lighting end)
-
-	local Void = workspace.FallenPartsDestroyHeight or -500
-
-	invisFixConnection = RunService.Stepped:Connect(function()
-		pcall(function()
-			if not IsInvis then return end
-			local char = Player.Character
-			local hrp = char and (char:FindFirstChild("HumanoidRootPart") or (char:FindFirstChildWhichIsA("Humanoid") and char:FindFirstChildWhichIsA("Humanoid").RootPart))
-			if hrp then
-				local isInteger = tostring(Void):find("-") ~= nil
-				local Y = hrp.Position.Y
-				if isInteger and Y <= Void then
-					Respawn()
-				elseif not isInteger and Y >= Void then
-					Respawn()
-				end
-			end
-		end)
-	end)
-
-	setupParts()
-
-	local cloneHum = InvisibleCharacter:FindFirstChildWhichIsA("Humanoid")
-	if cloneHum then
-		invisDiedConnection = cloneHum.Died:Connect(function()
-			if invisDiedConnection then invisDiedConnection:Disconnect(); invisDiedConnection = nil end
-			Respawn()
-		end)
-	end
-
-	local realHrp = RealCharacter:FindFirstChild("HumanoidRootPart")
-	local targetCFrame = realHrp and realHrp.CFrame or RealCharacter:GetPivot()
-
-	-- Teleport real character out of render range
-	pcall(function() RealCharacter:MoveTo(Vector3.new(0, math.pi * 1000000, 0)) end)
-
-	pcall(function()
-		workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
-	end)
-	task.wait(0.2)
-	pcall(function()
-		workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
-	end)
-
-	pcall(function() RealCharacter.Parent = Lighting end)
-	pcall(function() InvisibleCharacter.Parent = workspace end)
-
-	local cloneHrp = InvisibleCharacter:FindFirstChild("HumanoidRootPart")
-	if cloneHrp then
-		cloneHrp.CFrame = targetCFrame
-	else
-		pcall(function() InvisibleCharacter:PivotTo(targetCFrame) end)
-	end
-
-	Player.Character = InvisibleCharacter
-	IsInvis = true
-
-	local cam = workspace.CurrentCamera
-	if cam then
-		local subjectHum = InvisibleCharacter:FindFirstChildWhichIsA("Humanoid")
-		if subjectHum then
-			cam.CameraSubject = subjectHum
-		end
-		cam.CameraType = Enum.CameraType.Custom
-	end
-
-	pcall(function()
-		Player.CameraMinZoomDistance = 0.5
-		Player.CameraMaxZoomDistance = 400
-		Player.CameraMode = Enum.CameraMode.Classic
-	end)
-
-	local head = InvisibleCharacter:FindFirstChild("Head")
-	if head then
-		head.Anchored = false
-	end
-
-	local anim = InvisibleCharacter:FindFirstChild("Animate")
-	if anim and anim:IsA("LocalScript") then
-		pcall(function()
-			anim.Disabled = true
-			anim.Disabled = false
-		end)
-	end
+	setInvis(true)
 end
 
 local function stop()
-	if not IsInvis then return end
-
-	if invisFixConnection then
-		invisFixConnection:Disconnect()
-		invisFixConnection = nil
-	end
-	if invisDiedConnection then
-		invisDiedConnection:Disconnect()
-		invisDiedConnection = nil
-	end
-
-	local curChar = Player.Character or InvisibleCharacter
-	local curHrp = curChar and curChar:FindFirstChild("HumanoidRootPart")
-	local targetCFrame = curHrp and curHrp.CFrame
-
-	if InvisibleCharacter then
-		pcall(function() InvisibleCharacter:Destroy() end)
-		InvisibleCharacter = nil
-	end
-
-	if RealCharacter then
-		pcall(function()
-			RealCharacter.Parent = workspace
-			local rHrp = RealCharacter:FindFirstChild("HumanoidRootPart")
-			if rHrp and targetCFrame then
-				rHrp.CFrame = targetCFrame
-			end
-			Player.Character = RealCharacter
-		end)
-
-		local cam = workspace.CurrentCamera
-		if cam then
-			local rHum = RealCharacter:FindFirstChildWhichIsA("Humanoid")
-			if rHum then cam.CameraSubject = rHum end
-			cam.CameraType = Enum.CameraType.Custom
-		end
-
-		local realAnim = RealCharacter:FindFirstChild("Animate")
-		if realAnim and realAnim:IsA("LocalScript") then
-			pcall(function()
-				realAnim.Disabled = true
-				realAnim.Disabled = false
-			end)
-		end
-
-		local realHum = RealCharacter:FindFirstChildWhichIsA("Humanoid")
-		if realHum then
-			invisDiedConnection = realHum.Died:Connect(function()
-				if invisDiedConnection then invisDiedConnection:Disconnect(); invisDiedConnection = nil end
-				Respawn()
-			end)
-		end
-	end
-
-	IsInvis = false
-	invisRunning = false
-end
-
-local function isActive()
-	return IsInvis
+	setInvis(false)
 end
 
 local function toggle()
-	if IsInvis then
-		stop()
+	setInvis(not invisActive)
+end
+
+local function isActive()
+	return invisActive
+end
+
+-- Event Listeners
+bind(UIS.InputBegan, function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.KeyCode == Config.ToggleKey then
+		toggle()
+	end
+end)
+
+bind(lp.CharacterAdded, function(newChar)
+	if _invGhostConn then pcall(function() _invGhostConn:Disconnect() end); _invGhostConn = nil end
+	if invisHeartConn then pcall(function() invisHeartConn:Disconnect() end); invisHeartConn = nil end
+	if _invisHealthConn then pcall(function() _invisHealthConn:Disconnect() end); _invisHealthConn = nil end
+	if _invisHL and _invisHL.Parent then pcall(function() _invisHL:Destroy() end); _invisHL = nil end
+
+	for _, entry in ipairs(invisParts) do
+		pcall(function()
+			if entry.part and entry.part.Parent then
+				entry.part.Transparency = entry.origTransp
+			end
+		end)
+	end
+	invisParts    = {}
+	_invisSavedCF = nil
+
+	task.defer(function()
+		local newHum = newChar:FindFirstChildOfClass("Humanoid")
+		if newHum then pcall(function() newHum.CameraOffset = Vector3.zero end) end
+	end)
+
+	task.wait(0.5)
+	if invisActive then
+		invisSetupParts()
+		_invisHL = makeInvisSelfHL(newChar)
+		setInvis(true)
 	else
-		start()
+		invisSetupParts()
+	end
+end)
+
+-- Runtime Cleanup
+runtime.cleanup = function()
+	if runtime.destroyed then return end
+	runtime.destroyed = true
+
+	stop()
+
+	for _, c in ipairs(runtime.connections) do
+		pcall(function() c:Disconnect() end)
+	end
+	runtime.connections = {}
+
+	for i = #runtime.instances, 1, -1 do
+		pcall(function()
+			local inst = runtime.instances[i]
+			if inst and inst.Parent then inst:Destroy() end
+		end)
+	end
+	runtime.instances = {}
+
+	if GLOBAL_ENV and GLOBAL_ENV[RUNTIME_KEY] == runtime.module then
+		GLOBAL_ENV[RUNTIME_KEY] = nil
 	end
 end
 
--- Auto-cleanup on character respawn
-Player.CharacterAdded:Connect(function(newChar)
-	if invisFixConnection then invisFixConnection:Disconnect(); invisFixConnection = nil end
-	if invisDiedConnection then invisDiedConnection:Disconnect(); invisDiedConnection = nil end
-	if InvisibleCharacter and InvisibleCharacter.Parent then
-		pcall(function() InvisibleCharacter:Destroy() end)
-	end
-	InvisibleCharacter = nil
-	RealCharacter = newChar
-	IsInvis = false
-	invisRunning = false
-end)
-
+-- Export Module Interface
 local module = {
 	start      = start,
 	stop       = stop,
 	isActive   = isActive,
-	setupParts = setupParts,
+	setupParts = invisSetupParts,
 	toggle     = toggle,
-	cleanup    = stop,
+	cleanup    = runtime.cleanup,
 }
+runtime.module = module
 
 if GLOBAL_ENV then
 	GLOBAL_ENV[RUNTIME_KEY] = module
