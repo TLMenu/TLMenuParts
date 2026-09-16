@@ -1,6 +1,6 @@
 --!nocheck
 -- ══════════════════════════════════════════════════════════════════════
---  TL-NametagSystem.lua (TLMenu Module)
+--  TLMenu NametagSystem (Modular Edition v2.0)
 --  Universal, Bug-Free, High-Performance Overhead Nametag Engine
 -- ══════════════════════════════════════════════════════════════════════
 
@@ -430,6 +430,25 @@ function NametagSystem.GetPlayerInfo(playerOrName, isAdmin)
     }
 end
 
+function NametagSystem.DoesPlayerQualify(p)
+    if not NametagSystem.Config.enabled then return false end
+    if not p then return false end
+    if LocalPlayer and p == LocalPlayer then return true end
+    local cfg = NametagSystem.Config
+    local pName = p.Name
+    local pUserId = tostring(p.UserId)
+    if cfg.adminUsers[pName] == true or cfg.adminUsers[pUserId] == true then return true end
+    if cfg.nameOverrides[pName] ~= nil or cfg.nameOverrides[pUserId] ~= nil then return true end
+    if type(cfg.roleUsers) == "table" then
+        for _, users in pairs(cfg.roleUsers) do
+            for _, u in ipairs(users) do
+                if tostring(u):lower() == pName:lower() then return true end
+            end
+        end
+    end
+    return false
+end
+
 -- ══════════════════════════════════════════════════════════════════════
 -- 6. CREATE OVERHEAD NAMETAG
 -- ══════════════════════════════════════════════════════════════════════
@@ -706,6 +725,9 @@ function NametagSystem.Init(ctx)
         if ctx.configUrl then NametagSystem.Config.configUrl = ctx.configUrl end
         if ctx.AdminNames then
             for k, v in pairs(ctx.AdminNames) do NametagSystem.Config.adminUsers[k] = v end
+        end
+        if ctx.NameOverrides then
+            for k, v in pairs(ctx.NameOverrides) do NametagSystem.Config.nameOverrides[k] = v end
         end
     end
 
