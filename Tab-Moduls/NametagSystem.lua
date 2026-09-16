@@ -1,4 +1,4 @@
-﻿--!nocheck
+--!nocheck
 -- Standalone Module: NametagSystem
 -- Extracted from TLMenu
 
