@@ -26,6 +26,7 @@ local RealCharacter = nil
 local InvisibleCharacter = nil
 local invisFixConnection = nil
 local invisDiedConnection = nil
+local isSwitchingCharacter = false
 
 local function setupParts()
 	pcall(function()
@@ -49,8 +50,10 @@ local function Respawn()
 		if invisDiedConnection then invisDiedConnection:Disconnect(); invisDiedConnection = nil end
 
 		if RealCharacter and RealCharacter.Parent then
+			isSwitchingCharacter = true
 			Player.Character = RealCharacter
 			task.wait()
+			isSwitchingCharacter = false
 			RealCharacter.Parent = workspace
 			local hum = RealCharacter:FindFirstChildWhichIsA("Humanoid")
 			if hum then
@@ -128,7 +131,7 @@ local function start()
 	pcall(function()
 		workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
 	end)
-	task.wait(0.2)
+	task.wait(0.1)
 	pcall(function()
 		workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
 	end)
@@ -143,8 +146,10 @@ local function start()
 		pcall(function() InvisibleCharacter:PivotTo(targetCFrame) end)
 	end
 
+	isSwitchingCharacter = true
 	Player.Character = InvisibleCharacter
 	IsInvis = true
+	isSwitchingCharacter = false
 
 	local cam = workspace.CurrentCamera
 	if cam then
@@ -203,7 +208,9 @@ local function stop()
 			if rHrp and targetCFrame then
 				rHrp.CFrame = targetCFrame
 			end
+			isSwitchingCharacter = true
 			Player.Character = RealCharacter
+			isSwitchingCharacter = false
 		end)
 
 		local cam = workspace.CurrentCamera
@@ -238,6 +245,14 @@ local function isActive()
 	return IsInvis
 end
 
+local function setInvis(on)
+	if on then
+		start()
+	else
+		stop()
+	end
+end
+
 local function toggle()
 	if IsInvis then
 		stop()
@@ -248,6 +263,11 @@ end
 
 -- Auto-cleanup on character respawn
 Player.CharacterAdded:Connect(function(newChar)
+	-- IGNORE our own clone assignment
+	if isSwitchingCharacter or newChar == InvisibleCharacter then
+		return
+	end
+
 	if invisFixConnection then invisFixConnection:Disconnect(); invisFixConnection = nil end
 	if invisDiedConnection then invisDiedConnection:Disconnect(); invisDiedConnection = nil end
 	if InvisibleCharacter and InvisibleCharacter.Parent then
@@ -264,12 +284,23 @@ local module = {
 	stop       = stop,
 	isActive   = isActive,
 	setupParts = setupParts,
+	setInvis   = setInvis,
 	toggle     = toggle,
 	cleanup    = stop,
 }
 
+-- Register in global environment and TLMenu cache so TLMenu communicates seamlessly
 if GLOBAL_ENV then
 	GLOBAL_ENV[RUNTIME_KEY] = module
+	GLOBAL_ENV["_TL_Invisible"] = module
+	GLOBAL_ENV["Invisible"] = module
+	GLOBAL_ENV["_invisMod"] = module
+
+	-- If TLMenu module loader has already initialized _TL_MODULES
+	if type(GLOBAL_ENV._TL_MODULES) == "table" then
+		GLOBAL_ENV._TL_MODULES["Invisible"] = module
+		GLOBAL_ENV._TL_MODULES["TL-Invisible"] = module
+	end
 end
 
 return module
