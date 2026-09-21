@@ -135,7 +135,7 @@ local ATTACH_MODES = {
     bb_friend        = { x = 3,    y = 0,     z = 0 },
     bb_shit          = { x = 0,    y = 3.5,   z = -1.2 },
     bb_spidergrip    = { x = 0,    y = 0.2,   z = -0.8,  rotY = 180, osc = 0.35, oscSpeed = 0.8 },
-    bb_fingering     = { x = 0,    y = -1.8,  z = 1.9,   rotY = 0 },
+    bb_fingering     = { x = 0,    y = -0.8,  z = -1.9,  rotY = 0 },
     bb_ghosthover    = { x = 0,    y = 4.0,   z = 1.5,   rotY = 0 },
 }
 
