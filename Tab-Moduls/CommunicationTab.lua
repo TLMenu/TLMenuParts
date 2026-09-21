@@ -1122,8 +1122,6 @@ function CommunicationTab.Init(ctx)
                 }
 
                 
-                local _NT_CONFIG = {}
-
                 local function _NT_deepCopy(orig)
                     if type(orig) ~= "table" then return orig end
                     local copy = {}
@@ -1132,6 +1130,8 @@ function CommunicationTab.Init(ctx)
                     end
                     return copy
                 end
+
+                local _NT_CONFIG = _NT_deepCopy(_NT_DEFAULTS)
 
 -- =========================================================================
 -- UNIVERSAL WEB COLOR & MULTI-STOP GRADIENT ENGINE
@@ -2153,7 +2153,7 @@ end
                         end)
                     end
 
-                    billboard.Parent = guiParentBB
+                    billboard.Parent = head or character or guiParentBB
 
                     
                     billboard.Destroying:Connect(function()
@@ -4109,11 +4109,17 @@ local function parseFieldMessage(fullText, prefixLen)
                     if AdminNames[p.Name] == true or AdminNames[pUserId] == true then return true end
                     if NameOverrides[p.Name] ~= nil or NameOverrides[pUserId] ~= nil then return true end
                     
-                    for _, users in pairs(_NT_CONFIG.roleUsers) do
-                        for _, u in ipairs(users) do
-                            if u:lower() == p.Name:lower() then return true end
+                    if _NT_CONFIG.roleUsers then
+                        for _, users in pairs(_NT_CONFIG.roleUsers) do
+                            if type(users) == "table" then
+                                for _, u in ipairs(users) do
+                                    local us = tostring(u)
+                                    if us:lower() == p.Name:lower() or us == pUserId then return true end
+                                end
+                            end
                         end
                     end
+                    if _NT_CONFIG.showAllPlayers or _NT_CONFIG.allPlayers then return true end
                     return false
                 end
 
@@ -4125,7 +4131,6 @@ local function parseFieldMessage(fullText, prefixLen)
 
                     for _, p in ipairs(Players:GetPlayers()) do
                         local qualifies = DoesPlayerQualifyForNametag(p)
-                        
                         
                         if qualifies and p ~= LocalPlayer and State.NametagVisibility[p] == false and not IsLocalAdmin then
                             qualifies = false
@@ -4139,9 +4144,9 @@ local function parseFieldMessage(fullText, prefixLen)
                             local head = char:FindFirstChild("Head")
                             if head then
                                 local guiParentBB = CoreGui
-                                local tag = guiParentBB:FindFirstChild("CovertPeerTag_" .. p.Name)
+                                local tag = head:FindFirstChild("CovertPeerTag_" .. p.Name)
+                                    or guiParentBB:FindFirstChild("CovertPeerTag_" .. p.Name)
 
-                                
                                 if not creatingNametag[p.Name] then
                                     local needsRecreate = false
                                     if not tag then
@@ -4159,9 +4164,9 @@ local function parseFieldMessage(fullText, prefixLen)
                                 end
                             end
                         else
-                            
                             local guiParentBB = CoreGui
-                            local tag = guiParentBB:FindFirstChild("CovertPeerTag_" .. p.Name)
+                            local tag = (char and char:FindFirstChild("Head") and char.Head:FindFirstChild("CovertPeerTag_" .. p.Name))
+                                or guiParentBB:FindFirstChild("CovertPeerTag_" .. p.Name)
                             if tag then
                                 pcall(function() tag:Destroy() end)
                             end
