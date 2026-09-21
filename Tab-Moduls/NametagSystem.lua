@@ -147,13 +147,30 @@ function NametagSystem.Init(ctx)
     end
 
     local function _findExistingBillboard(pName)
-        local c = _getGuiContainer()
-        local b = c and c:FindFirstChild("CovertPeerTag_" .. pName)
-        if not b and LocalPlayer then
-            local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-            if pg then b = pg:FindFirstChild("CovertPeerTag_" .. pName) end
+        local p = _SvcPlr:FindFirstChild(pName)
+        if p and p.Character then
+            local h = p.Character:FindFirstChild("Head")
+            if h then
+                local b = h:FindFirstChild("CovertPeerTag_" .. pName)
+                if b then return b end
+            end
+            local bChar = p.Character:FindFirstChild("CovertPeerTag_" .. pName)
+            if bChar then return bChar end
         end
-        return b
+        local lp = LocalPlayer or _SvcPlr.LocalPlayer
+        if lp then
+            local pg = lp:FindFirstChildOfClass("PlayerGui")
+            if pg then
+                local b = pg:FindFirstChild("CovertPeerTag_" .. pName)
+                if b then return b end
+            end
+        end
+        local c = _getGuiContainer()
+        if c then
+            local b = c:FindFirstChild("CovertPeerTag_" .. pName)
+            if b then return b end
+        end
+        return nil
     end
 
     local function _NT_safeFont(fontName, fallback)
@@ -402,6 +419,98 @@ function NametagSystem.Init(ctx)
         end
         task.spawn(function()
             pcall(function()
+                local cUrl = ctx.configUrl or "https://raw.githubusercontent.com/TLMenu/TLMenu.github.io/refs/heads/main/NametagConfig.json"
+                local res = _safeHttpGet(cUrl)
+                if res and #res > 5 then
+                    local ok, json = pcall(function() return _SvcHttp:JSONDecode(res) end)
+                    if ok and type(json) == "table" then
+                        if json.enabled ~= nil then
+                            _NT_CONFIG.enabled = json.enabled
+                        end
+                        if json.targetUser ~= nil then
+                            _NT_CONFIG.targetUser = json.targetUser
+                        end
+                        if json.roleUsers and type(json.roleUsers) == "table" then
+                            _NT_CONFIG.roleUsers = _NT_CONFIG.roleUsers or {}
+                            for role, users in pairs(json.roleUsers) do
+                                _NT_CONFIG.roleUsers[role] = users
+                                if role == "owner" or role == "admin" or role == "developer" then
+                                    for _, u in ipairs(users) do
+                                        AdminNames[tostring(u)] = true
+                                    end
+                                end
+                            end
+                        end
+                        if json.roleLabels and type(json.roleLabels) == "table" then
+                            _NT_CONFIG.roleLabels = json.roleLabels
+                        end
+                        if json.displayNames and type(json.displayNames) == "table" then
+                            _NT_CONFIG.displayNames = json.displayNames
+                        end
+                        if json.roleDisplayNames and type(json.roleDisplayNames) == "table" then
+                            _NT_CONFIG.roleDisplayNames = json.roleDisplayNames
+                        end
+                        if json.customAvatars and type(json.customAvatars) == "table" then
+                            _NT_CONFIG.customAvatars = json.customAvatars
+                        end
+                        if json.userColorOverrides and type(json.userColorOverrides) == "table" then
+                            _NT_CONFIG.userColorOverrides = json.userColorOverrides
+                        end
+                        if json.userGradientOverrides and type(json.userGradientOverrides) == "table" then
+                            _NT_CONFIG.userGradientOverrides = json.userGradientOverrides
+                        end
+                        if json.profilePictures and type(json.profilePictures) == "table" then
+                            _NT_CONFIG.profilePictures = _NT_CONFIG.profilePictures or {}
+                            for k, v in pairs(json.profilePictures) do
+                                _NT_CONFIG.profilePictures[k] = v
+                            end
+                        end
+                        if json.tagImages and type(json.tagImages) == "table" then
+                            _NT_CONFIG.tagImages = _NT_CONFIG.tagImages or {}
+                            for k, v in pairs(json.tagImages) do
+                                _NT_CONFIG.tagImages[k] = v
+                            end
+                        end
+                        if json.roleKeywords and type(json.roleKeywords) == "table" then
+                            _NT_CONFIG.roleKeywords = _NT_CONFIG.roleKeywords or {}
+                            for k, v in pairs(json.roleKeywords) do
+                                _NT_CONFIG.roleKeywords[k] = v
+                            end
+                        end
+                        if json.animations and type(json.animations) == "table" then
+                            _NT_CONFIG.animations = _NT_CONFIG.animations or {}
+                            for k, v in pairs(json.animations) do
+                                _NT_CONFIG.animations[k] = v
+                            end
+                        end
+                        if json.particles and type(json.particles) == "table" then
+                            _NT_CONFIG.particles = _NT_CONFIG.particles or {}
+                            for k, v in pairs(json.particles) do
+                                _NT_CONFIG.particles[k] = v
+                            end
+                        end
+                        if json.gradients and type(json.gradients) == "table" then
+                            _NT_CONFIG.gradients = _NT_CONFIG.gradients or {}
+                            for k, v in pairs(json.gradients) do
+                                _NT_CONFIG.gradients[k] = v
+                            end
+                        end
+                        if json.themes and type(json.themes) == "table" then
+                            _NT_CONFIG.themes = _NT_CONFIG.themes or {}
+                            for k, v in pairs(json.themes) do
+                                _NT_CONFIG.themes[k] = v
+                            end
+                        end
+                        if json.layout and type(json.layout) == "table" then
+                            _NT_CONFIG.layout = _NT_CONFIG.layout or {}
+                            for k, v in pairs(json.layout) do
+                                _NT_CONFIG.layout[k] = v
+                            end
+                        end
+                    end
+                end
+            end)
+            pcall(function()
                 local rUrl = ctx.rolesUrl or "https://raw.githubusercontent.com/TLMenu/TLMenu.github.io/refs/heads/main/NametagRoles.json"
                 local res = _safeHttpGet(rUrl)
                 if res and #res > 5 then
@@ -421,25 +530,6 @@ function NametagSystem.Init(ctx)
                         if json.nameOverrides and type(json.nameOverrides) == "table" then
                             for k, v in pairs(json.nameOverrides) do
                                 NameOverrides[k] = v
-                            end
-                        end
-                    end
-                end
-            end)
-            pcall(function()
-                local cUrl = ctx.configUrl or "https://raw.githubusercontent.com/TLMenu/TLMenu.github.io/refs/heads/main/NametagConfig.json"
-                local res = _safeHttpGet(cUrl)
-                if res and #res > 5 then
-                    local ok, json = pcall(function() return _SvcHttp:JSONDecode(res) end)
-                    if ok and type(json) == "table" then
-                        if json.themes and type(json.themes) == "table" then
-                            for k, v in pairs(json.themes) do
-                                _NT_CONFIG.themes[k] = v
-                            end
-                        end
-                        if json.layout and type(json.layout) == "table" then
-                            for k, v in pairs(json.layout) do
-                                _NT_CONFIG.layout[k] = v
                             end
                         end
                     end
@@ -1123,6 +1213,10 @@ end
             end
         end
 
+        if _NT_CONFIG.showAllPlayers or _NT_CONFIG.allPlayers then
+            return true
+        end
+
         return false
     end
 
@@ -1135,7 +1229,7 @@ end
         local pObj = _SvcPlr:FindFirstChild(playerName)
         local isLocal = (lp and playerName:lower() == lp.Name:lower()) or (pObj and lp and pObj == lp)
 
-        -- STRICT QUALIFICATION FILTER: Normal players NEVER receive an overhead nametag!
+        -- Qualification check
         if not DoesPlayerQualifyForNametag(pObj or playerName) then
             local existing = _findExistingBillboard(playerName)
             if existing then pcall(function() existing:Destroy() end) end
@@ -1159,8 +1253,12 @@ end
 
         if creatingNametag[playerName] then return end
         creatingNametag[playerName] = true
+        task.delay(1.5, function()
+            creatingNametag[playerName] = nil
+        end)
+        local _ntOk, _ntErr = pcall(function()
 
-                    local player = Players:FindFirstChild(playerName)
+                    local player = _SvcPlr:FindFirstChild(playerName)
                     local playerUserId = player and tostring(player.UserId) or nil
 
                     local override = NameOverrides[playerName]
@@ -1184,7 +1282,7 @@ end
                     local _ntHighestPrio = 0
                     for role, users in pairs(_NT_CONFIG.roleUsers) do
                         for _, u in ipairs(users) do
-                            if u:lower() == playerName:lower() then
+                            if tostring(u):lower() == playerName:lower() then
                                 local prio = _NT_ROLE_PRIO[role] or 0
                                 if prio > _ntHighestPrio then
                                     _ntHighestPrio = prio
@@ -1265,22 +1363,31 @@ end
                         end
                     end
 
+                    theme = _NT_deepCopy(theme)
+                    for _, k in ipairs({ "bg", "avatarBg", "avatarText", "divider", "border", "nameText", "roleText" }) do
+                        theme[k] = _NT_parseColor(theme[k])
+                    end
+
                     local head = character:WaitForChild("Head", 5)
                     if not head then
                         creatingNametag[playerName] = nil; return
                     end
 
-                    local guiParentBB = _getGuiContainer()
                     local existingBB  = _findExistingBillboard(playerName)
                     if existingBB then pcall(function() existingBB:Destroy() end) end
+
+                    local bbW = (_NT_CONFIG.layout and _NT_CONFIG.layout.billboardWidth) or 240
+                    local bbH = (_NT_CONFIG.layout and _NT_CONFIG.layout.billboardHeight) or 44
+                    local offY = (_NT_CONFIG.layout and _NT_CONFIG.layout.studsOffsetY) or 3.4
 
                     local billboard             = Instance.new("BillboardGui")
                     billboard.Name              = "CovertPeerTag_" .. playerName
                     billboard.Adornee           = head
-                    billboard.Size              = UDim2.new(0, _NT_CONFIG.layout.billboardWidth, 0, _NT_CONFIG.layout.billboardHeight)
-                    billboard.StudsOffset       = Vector3.new(0, _NT_CONFIG.layout.studsOffsetY, 0)
+                    billboard.Size              = UDim2.new(0, bbW, 0, bbH)
+                    billboard.StudsOffset       = Vector3.new(0, offY, 0)
                     billboard.AlwaysOnTop       = true
                     billboard.LightInfluence    = 0
+                    billboard.MaxDistance       = 250
 
                     
                     local card                       = Instance.new("Frame")
@@ -1539,21 +1646,21 @@ end
                         end)
                     end
 
-                    billboard.Parent = guiParentBB
+                    billboard.Parent = head or character or _getGuiContainer()
 
-                    
                     billboard.Destroying:Connect(function()
                         _NT_stopGradientAnims(billboard)
                     end)
 
-                    
-                    local fadeDur = _NT_CONFIG.animations.fadeInDuration
-                    local fadeEasing = _NT_EASING_MAP[_NT_CONFIG.animations.fadeInEasing] or Enum.EasingStyle.Quad
+                    local fadeDur = (_NT_CONFIG.animations and _NT_CONFIG.animations.fadeInDuration) or 0.25
+                    local fadeEasing = _NT_EASING_MAP[_NT_CONFIG.animations and _NT_CONFIG.animations.fadeInEasing] or Enum.EasingStyle.Quad
                     local fadeInfo = TweenInfo.new(fadeDur, fadeEasing)
-                    local tw1 = TweenService:Create(card,       fadeInfo, { BackgroundTransparency = _NT_CONFIG.animations.cardTransparency })
-                    local tw2 = TweenService:Create(cardBorder, fadeInfo, { Transparency          = _NT_CONFIG.animations.borderTransparency })
-                    tw1:Play()
-                    tw2:Play()
+                    local targetCardTransp = (_NT_CONFIG.animations and _NT_CONFIG.animations.cardTransparency) or 0
+                    local targetBorderTransp = (_NT_CONFIG.animations and _NT_CONFIG.animations.borderTransparency) or 0.3
+                    local tw1 = TweenService:Create(card,       fadeInfo, { BackgroundTransparency = targetCardTransp })
+                    local tw2 = TweenService:Create(cardBorder, fadeInfo, { Transparency          = targetBorderTransp })
+                    pcall(function() tw1:Play() end)
+                    pcall(function() tw2:Play() end)
 
                     
                     local activeGradients = _NT_resolveGradientSet(playerName, themeKey, theme)
@@ -1607,7 +1714,12 @@ end
                             _savedGrads = nil
                         end
                     end)
-                end
+        end)
+        if not _ntOk then
+            creatingNametag[playerName] = nil
+            warn("[NametagSystem] " .. tostring(_ntErr))
+        end
+    end
 
                 
     local function RemoveNametag(playerOrName)
@@ -1619,6 +1731,9 @@ end
     end
 
     local function RemoveAll()
+        for _, p in ipairs(_SvcPlr:GetPlayers()) do
+            RemoveNametag(p.Name)
+        end
         local container = _getGuiContainer()
         if container then
             for _, desc in ipairs(container:GetDescendants()) do
