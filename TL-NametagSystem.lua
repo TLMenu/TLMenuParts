@@ -1159,8 +1159,9 @@ end
 
         if creatingNametag[playerName] then return end
         creatingNametag[playerName] = true
+        local _ntOk, _ntErr = pcall(function()
 
-                    local player = Players:FindFirstChild(playerName)
+                    local player = _SvcPlr:FindFirstChild(playerName)
                     local playerUserId = player and tostring(player.UserId) or nil
 
                     local override = NameOverrides[playerName]
@@ -1184,7 +1185,7 @@ end
                     local _ntHighestPrio = 0
                     for role, users in pairs(_NT_CONFIG.roleUsers) do
                         for _, u in ipairs(users) do
-                            if u:lower() == playerName:lower() then
+                            if tostring(u):lower() == playerName:lower() then
                                 local prio = _NT_ROLE_PRIO[role] or 0
                                 if prio > _ntHighestPrio then
                                     _ntHighestPrio = prio
@@ -1263,6 +1264,11 @@ end
                                 _NT_CONFIG.gradients[gradKey] = _NT_deepCopy(gradData)
                             end
                         end
+                    end
+
+                    theme = _NT_deepCopy(theme)
+                    for _, k in ipairs({ "bg", "avatarBg", "avatarText", "divider", "border", "nameText", "roleText" }) do
+                        theme[k] = _NT_parseColor(theme[k])
                     end
 
                     local head = character:WaitForChild("Head", 5)
@@ -1607,7 +1613,12 @@ end
                             _savedGrads = nil
                         end
                     end)
-                end
+        end)
+        if not _ntOk then
+            creatingNametag[playerName] = nil
+            warn("[NametagSystem] " .. tostring(_ntErr))
+        end
+    end
 
                 
     local function RemoveNametag(playerOrName)
