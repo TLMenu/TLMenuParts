@@ -196,7 +196,7 @@ function SettingsTab.Init(ctx)
                     { id = "Keybinds", icon = "⌨", img = "rbxassetid://77626648521931", col = Color3.fromRGB(160, 80, 255), iconSize = 28 },
                     { id = "Colors", icon = "🎨", img = "rbxassetid://82124356614946", col = Color3.fromRGB(160, 80, 255), iconSize = 28 },
                     { id = "Theme", icon = "🎭", img = "rbxassetid://101141137166858", col = Color3.fromRGB(160, 80, 255), iconSize = 28 },
-                    { id = "C-CURSOR", icon = "👁", img = "rbxassetid://136959112324947", col = Color3.fromRGB(160, 80, 255), iconSize = 35 },
+
                     { id = "Music", icon = "🎵", img = "rbxassetid://120388484536699", col = Color3.fromRGB(160, 80, 255), iconSize = 28 },
                     { id = "Nametag", icon = "🏷", img = "rbxassetid://117318347375651", col = Color3.fromRGB(160, 80, 255), iconSize = 28 },
                 }
@@ -862,36 +862,7 @@ function SettingsTab.Init(ctx)
                 
                 
                 
-                local function _VCOL() return C.accent end
-                local visualSettingsPage
-                local _ok_visualPage = pcall(function()
-                    visualSettingsPage                        = Instance.new("Frame", subArea)
-                    visualSettingsPage.BackgroundTransparency = 1; visualSettingsPage.BorderSizePixel = 0
-                    visualSettingsPage.Visible                = false
 
-                    local _curMod = _TL_loadModule("C-CURSOR")
-                    if _curMod then
-                        _curMod.init({
-                            _SvcUIS = _SvcUIS,
-                            _SvcRS = _SvcRS,
-                            _tryParentGui = _tryParentGui,
-                            corner = corner,
-                            _makeDummyStroke = _makeDummyStroke,
-                            _sc = _sc,
-                            C = C,
-                            _panelColorHooks = _panelColorHooks,
-                            _isMobile = _isMobile,
-                            _isTablet = _isTablet,
-                            LocalPlayer = LocalPlayer,
-                            _C3_WHITE = _C3_WHITE,
-                            PANEL_W = PANEL_W,
-                        })
-                        _panelColorHooks[#_panelColorHooks + 1] = function()
-                            _curMod.applyTheme()
-                        end
-                        _curMod.buildSettingsUI(visualSettingsPage, { twP = twP })
-                    end
-                end) 
 
                 task.wait(0.05)
                             
