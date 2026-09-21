@@ -422,7 +422,20 @@ function NametagSystem.Init(ctx)
                 local cUrl = ctx.configUrl or "https://raw.githubusercontent.com/TLMenu/TLMenu.github.io/refs/heads/main/NametagConfig.json"
                 local res = _safeHttpGet(cUrl)
                 if res and #res > 5 then
+                    res = res:gsub("^[\239\187\191%s]+", ""):gsub("[%s]+$", "")
+                    res = res:gsub("^<pre>(.-)</pre>$", "%1")
+                    res = res:gsub("^<code>(.-)</code>$", "%1")
+                    res = res:gsub("^<html>.-({.-}).-</html>$", "%1")
+                    if not res:match("^%s*{") then
+                        local s, e = res:find("{.*}")
+                        if s then res = res:sub(s, e) end
+                    end
                     local ok, json = pcall(function() return _SvcHttp:JSONDecode(res) end)
+                    if not ok or type(json) ~= "table" then
+                        warn("[NametagConfig] JSON parse failed — using defaults")
+                        if not ok then warn("[NametagConfig] Parse error:", tostring(json)) end
+                        warn("[NametagConfig] Response length:", #res, "| Starts with:", res:sub(1, 80))
+                    end
                     if ok and type(json) == "table" then
                         if json.enabled ~= nil then
                             _NT_CONFIG.enabled = json.enabled
