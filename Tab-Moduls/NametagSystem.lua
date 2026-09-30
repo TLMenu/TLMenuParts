@@ -326,7 +326,6 @@ function NametagSystem.Init(ctx)
 
     local _NT_DEFAULTS = {
         enabled = true,
-        showAllPlayers = true,
         alwaysVisibleRoles = { "owner", "developer", "admin", "moderator", "staff" },
         hiddenUsers = {},
         themes = {
@@ -643,9 +642,6 @@ function NametagSystem.Init(ctx)
         end
         if json.targetUser ~= nil then
             _NT_CONFIG.targetUser = json.targetUser
-        end
-        if type(json.showAllPlayers) == "boolean" then
-            _NT_CONFIG.showAllPlayers = json.showAllPlayers
         end
         if type(json.alwaysVisibleRoles) == "table" then
             _NT_CONFIG.alwaysVisibleRoles = json.alwaysVisibleRoles
@@ -1560,54 +1556,31 @@ function NametagSystem.Init(ctx)
         end
         local lp = LocalPlayer or _SvcPlr.LocalPlayer
         local pObj = nil
-        local pName = ""
-        local pUserId = ""
         if typeof(p) == "Instance" and p:IsA("Player") then
             pObj = p
-            pName = p.Name
-            pUserId = tostring(p.UserId)
         elseif type(p) == "string" then
-            pName = p
             pObj = _SvcPlr:FindFirstChild(p)
-            if pObj then
-                pUserId = tostring(pObj.UserId)
-            end
         else
+            return false
+        end
+        if not pObj then
+            return false
+        end
+
+        if lp and pObj == lp then
+            return true
+        end
+
+        local State = ctx.State or rawget(_genv, "State") or {}
+        if not (State.VerifiedPeers and State.VerifiedPeers[pObj] ~= nil) then
             return false
         end
 
         local tgt = _NT_CONFIG.targetUser
         if type(tgt) == "string" and tgt ~= "" then
-            if (lp and pName:lower() == lp.Name:lower()) or (pObj and lp and pObj == lp) then
-                return true
-            end
-            if pName:lower() == tgt:lower() then
-                return true
-            end
-            return false
+            return pObj.Name:lower() == tgt:lower()
         end
-
-        if (lp and pName:lower() == lp.Name:lower()) or (pObj and lp and pObj == lp) then
-            return true
-        end
-
-        local State = ctx.State or rawget(_genv, "State") or {}
-        if State and State.VerifiedPeers and pObj and State.VerifiedPeers[pObj] ~= nil then
-            return true
-        end
-
-        if AdminNames and (AdminNames[pName] == true or (pUserId ~= "" and AdminNames[pUserId] == true)) then
-            return true
-        end
-        if NameOverrides and (NameOverrides[pName] ~= nil or (pUserId ~= "" and NameOverrides[pUserId] ~= nil)) then
-            return true
-        end
-
-        if _NT_lookupRole(pName:lower(), pUserId ~= "" and pUserId or nil) then
-            return true
-        end
-
-        return _NT_CONFIG.showAllPlayers ~= false or _NT_CONFIG.allPlayers == true
+        return true
     end
 
     local function _NT_isAdmin(p)
