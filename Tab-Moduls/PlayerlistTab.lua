@@ -27,10 +27,28 @@ local function sendStaffDetectorNotification(_TL_refs, title, text, color)
     end)
 end
 
+local function isPerkRole(roleName)
+    local s = tostring(roleName):lower()
+    return s:match("free admin") or s:match("vip") or s:match("donator") or s:match("premium")
+end
+
+local groupBaseRank = {}
+local function getGroupBaseRank(groupId)
+    if groupBaseRank[groupId] then return groupBaseRank[groupId] end
+    local ok, info = pcall(function() return game:GetService("GroupService"):GetGroupInfoAsync(groupId) end)
+    if not ok or type(info) ~= "table" or type(info.Roles) ~= "table" then return nil end
+    local base
+    for _, r in ipairs(info.Roles) do
+        if r.Rank > 0 and (not base or r.Rank < base) then base = r.Rank end
+    end
+    groupBaseRank[groupId] = base or 1
+    return groupBaseRank[groupId]
+end
+
 local function isThreatRole(roleName)
     if not roleName then return false end
     local s = tostring(roleName):lower()
-    if s:match("free admin") or s:match("vip") or s:match("donator") or s:match("premium") then
+    if isPerkRole(roleName) then
         return false
     end
     if s:match("admin") or s:match("mod") or s:match("owner") or s:match("creator")
@@ -61,6 +79,7 @@ end
 
 local function checkPlayerForStaff(plr, LocalPlayer)
     if not plr or plr == LocalPlayer then return false, "" end
+    if not game:IsLoaded() then game.Loaded:Wait() end
     local isGroupGame = game.CreatorType == Enum.CreatorType.Group
     local creatorId = game.CreatorId
 
@@ -72,21 +91,25 @@ local function checkPlayerForStaff(plr, LocalPlayer)
         return true, "VIP Server Owner (Admin)", "Owner"
     end
     if isGroupGame then
-        local successRank, rank = pcall(function() return plr:GetRankInGroup(creatorId) end)
-        local successRole, roleName = pcall(function() return plr:GetRoleInGroup(creatorId) end)
-        if successRank and successRole and type(rank) == "number" and rank > 0 then
+        local rank, roleName
+        for _ = 1, 3 do
+            local okRank, r = pcall(function() return plr:GetRankInGroup(creatorId) end)
+            local okRole, n = pcall(function() return plr:GetRoleInGroup(creatorId) end)
+            if okRank and okRole and type(r) == "number" then
+                rank, roleName = r, n
+                break
+            end
+            task.wait(1)
+        end
+        if rank and rank > 0 then
             local roleStr = "Group Role: " .. tostring(roleName)
             if rank == 255 then
                 return true, roleStr, "Owner"
             end
 
             local cat = classifyRole(roleName)
-            if not cat then
-                if rank >= 200 then
-                    cat = "Admin"
-                elseif rank >= 100 then
-                    cat = "Moderator"
-                end
+            if not cat and not isPerkRole(roleName) and rank > (getGroupBaseRank(creatorId) or 99) then
+                cat = rank >= 200 and "Admin" or "Moderator"
             end
             if cat or isThreatRole(roleName) then
                 return true, roleStr, cat
