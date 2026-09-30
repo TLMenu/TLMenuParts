@@ -1572,7 +1572,8 @@ function NametagSystem.Init(ctx)
         end
 
         local State = ctx.State or rawget(_genv, "State") or {}
-        if not (State.VerifiedPeers and State.VerifiedPeers[pObj] ~= nil) then
+        local _vp = State.VerifiedPeers
+        if type(_vp) ~= "table" or _vp[pObj] ~= true then
             return false
         end
 
@@ -1820,9 +1821,25 @@ function NametagSystem.Init(ctx)
                 creatingNametag[playerName] = nil
                 return
             end
+            do
+                local _p2 = _SvcPlr:FindFirstChild(playerName)
+                if not _p2 or not DoesPlayerQualifyForNametag(_p2) then
+                    creatingNametag[playerName] = nil
+                    return
+                end
+            end
 
             local existingBB = _findExistingBillboard(playerName)
             if existingBB then
+                if
+                    existingBB.Parent
+                    and existingBB.Adornee == head
+                    and existingBB:GetAttribute("NT_Owner") == _NT_instId
+                    and not existingBB:GetAttribute("NT_Removing")
+                then
+                    creatingNametag[playerName] = nil
+                    return
+                end
                 _NT_destroyTag(existingBB)
             end
 
