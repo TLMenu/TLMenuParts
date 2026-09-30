@@ -404,6 +404,9 @@ function NametagSystem.Init(ctx)
 
     local _NT_DEFAULTS = {
         enabled = true,
+        showAllPlayers = true,
+        alwaysVisibleRoles = { "owner", "developer", "admin", "moderator", "staff" },
+        hiddenUsers = {},
         themes = {
             user = {
                 bg = "#1A1A22",
@@ -685,6 +688,12 @@ function NametagSystem.Init(ctx)
                         end
                         if json.targetUser ~= nil then
                             _NT_CONFIG.targetUser = json.targetUser
+                        end
+                        if type(json.showAllPlayers) == "boolean" then
+                            _NT_CONFIG.showAllPlayers = json.showAllPlayers
+                        end
+                        if type(json.alwaysVisibleRoles) == "table" then
+                            _NT_CONFIG.alwaysVisibleRoles = json.alwaysVisibleRoles
                         end
                         if json.roleUsers and type(json.roleUsers) == "table" then
                             _NT_CONFIG.roleUsers = _NT_CONFIG.roleUsers or {}
@@ -1609,11 +1618,7 @@ function NametagSystem.Init(ctx)
             end
         end
 
-        if _NT_CONFIG.showAllPlayers or _NT_CONFIG.allPlayers then
-            return true
-        end
-
-        return false
+        return _NT_CONFIG.showAllPlayers ~= false or _NT_CONFIG.allPlayers == true
     end
 
     local function _NT_isAdmin(p)
@@ -1635,6 +1640,125 @@ function NametagSystem.Init(ctx)
         return false
     end
 
+    local _NT_ROLE_PRIO = { owner = 7, developer = 6, admin = 5, moderator = 4, staff = 3, advertising = 2, user = 1 }
+    local _NT_KEYWORD_ORDER = { "owner", "developer", "admin", "moderator", "staff", "advertising" }
+
+    local function _NT_findOverride(playerName, playerUserId)
+        local override = NameOverrides[playerName]
+        if not override and playerUserId then
+            override = NameOverrides[playerUserId]
+        end
+        return override
+    end
+
+    local function _NT_resolveThemeKey(playerName, playerUserId, isAdmin)
+        local override = _NT_findOverride(playerName, playerUserId)
+        local roleLabel = _NT_CONFIG.roleLabels and _NT_CONFIG.roleLabels[playerName] or (override and override.role)
+        local roleLower = (roleLabel or (isAdmin and "TL Admin" or "TL User")):lower()
+        local displayLower = (override and override.display or ""):lower()
+        local nameLower = playerName:lower()
+        local themeKey = "user"
+        local highestPrio = 0
+
+        for role, users in pairs(_NT_CONFIG.roleUsers or {}) do
+            for _, u in ipairs(type(users) == "table" and users or {}) do
+                local us = tostring(u)
+                if us:lower() == nameLower or (playerUserId and us == playerUserId) then
+                    local prio = _NT_ROLE_PRIO[role] or 0
+                    if prio > highestPrio then
+                        highestPrio = prio
+                        themeKey = role
+                    end
+                    break
+                end
+            end
+        end
+
+        if themeKey == "user" then
+            local kwTable = _NT_CONFIG.roleKeywords or {}
+            local function matchRole(tk)
+                local keywords = kwTable[tk]
+                if type(keywords) ~= "table" then
+                    return false
+                end
+                for _, kw in ipairs(keywords) do
+                    if type(kw) == "string" and kw ~= "" then
+                        local k = kw:lower()
+                        if roleLower:find(k, 1, true) or displayLower:find(k, 1, true) then
+                            return true
+                        end
+                    end
+                end
+                return false
+            end
+            for _, tk in ipairs(_NT_KEYWORD_ORDER) do
+                if matchRole(tk) then
+                    themeKey = tk
+                    break
+                end
+            end
+            if themeKey == "user" then
+                for tk in pairs(kwTable) do
+                    if tk ~= "user" and matchRole(tk) then
+                        themeKey = tk
+                        break
+                    end
+                end
+            end
+        end
+
+        if themeKey == "user" and isAdmin then
+            themeKey = "admin"
+        end
+        return themeKey
+    end
+
+    local function _NT_isAlwaysVisible(playerName, playerUserId, isAdmin)
+        local roles = _NT_CONFIG.alwaysVisibleRoles
+        if type(roles) ~= "table" then
+            return false
+        end
+        local themeKey = _NT_resolveThemeKey(playerName, playerUserId, isAdmin)
+        for _, role in ipairs(roles) do
+            if role == themeKey then
+                return true
+            end
+        end
+        return false
+    end
+
+    local function _NT_shouldShowNametag(p, isAdmin)
+        local pObj = typeof(p) == "Instance" and p or nil
+        if not pObj and type(p) == "string" then
+            pObj = _SvcPlr:FindFirstChild(p)
+        end
+        local pName = pObj and pObj.Name or (type(p) == "string" and p or nil)
+        if not pName then
+            return false
+        end
+        local pUserId = pObj and tostring(pObj.UserId) or nil
+
+        local lp = LocalPlayer or _SvcPlr.LocalPlayer
+        if lp and pName:lower() == lp.Name:lower() then
+            return not (_NT_CONFIG.removeOwnNametag or (ctx.settingsState and ctx.settingsState.removeNametag))
+        end
+
+        isAdmin = isAdmin or (pObj and _NT_isAdmin(pObj)) or false
+        if isAdmin or _NT_isAlwaysVisible(pName, pUserId, isAdmin) then
+            return true
+        end
+
+        local State = ctx.State or rawget(_genv, "State") or {}
+        if State.NametagVisibility and pObj and State.NametagVisibility[pObj] == false then
+            return false
+        end
+        local hidden = _NT_CONFIG.hiddenUsers
+        if type(hidden) == "table" and (hidden[pName] or (pUserId and hidden[pUserId])) then
+            return false
+        end
+        return true
+    end
+
     local creatingNametag = {}
     local function CreateCustomNametag(character, playerName, isAdmin)
         if not character then
@@ -1644,9 +1768,7 @@ function NametagSystem.Init(ctx)
             return
         end
 
-        local lp = LocalPlayer or _SvcPlr.LocalPlayer
         local pObj = _SvcPlr:FindFirstChild(playerName)
-        local isLocal = (lp and playerName:lower() == lp.Name:lower()) or (pObj and lp and pObj == lp)
 
         if not DoesPlayerQualifyForNametag(pObj or playerName) then
             local existing = _findExistingBillboard(playerName)
@@ -1658,25 +1780,7 @@ function NametagSystem.Init(ctx)
             return
         end
 
-        if isLocal and (_NT_CONFIG.removeOwnNametag or (ctx.settingsState and ctx.settingsState.removeNametag)) then
-            local existing = _findExistingBillboard(playerName)
-            if existing then
-                pcall(function()
-                    existing:Destroy()
-                end)
-            end
-            return
-        end
-
-        local State = ctx.State or rawget(_genv, "State") or {}
-        if
-            not isLocal
-            and State
-            and State.NametagVisibility
-            and pObj
-            and State.NametagVisibility[pObj] == false
-            and not isAdmin
-        then
+        if not _NT_shouldShowNametag(pObj or playerName, isAdmin) then
             local existing = _findExistingBillboard(playerName)
             if existing then
                 pcall(function()
@@ -1709,62 +1813,7 @@ function NametagSystem.Init(ctx)
             local roleLabel = _NT_CONFIG.roleLabels and _NT_CONFIG.roleLabels[playerName]
                 or (override and override.role or nil)
 
-            local roleLower = (roleLabel or (isAdmin and "TL Admin" or "TL User")):lower()
-            local displayLower = (override and override.display or ""):lower()
-            local themeKey = "user"
-
-            local _NT_ROLE_PRIO =
-                { owner = 7, developer = 6, admin = 5, moderator = 4, staff = 3, advertising = 2, user = 1 }
-            local _ntHighestPrio = 0
-            for role, users in pairs(_NT_CONFIG.roleUsers) do
-                for _, u in ipairs(type(users) == "table" and users or {}) do
-                    if tostring(u):lower() == playerName:lower() then
-                        local prio = _NT_ROLE_PRIO[role] or 0
-                        if prio > _ntHighestPrio then
-                            _ntHighestPrio = prio
-                            themeKey = role
-                        end
-                        break
-                    end
-                end
-            end
-
-            if themeKey == "user" then
-                local kwTable = _NT_CONFIG.roleKeywords or {}
-                local function _matchRole(tk)
-                    local keywords = kwTable[tk]
-                    if type(keywords) ~= "table" then
-                        return false
-                    end
-                    for _, kw in ipairs(keywords) do
-                        if type(kw) == "string" and kw ~= "" then
-                            local k = kw:lower()
-                            if roleLower:find(k, 1, true) or displayLower:find(k, 1, true) then
-                                return true
-                            end
-                        end
-                    end
-                    return false
-                end
-                for _, tk in ipairs({ "owner", "developer", "admin", "moderator", "staff", "advertising" }) do
-                    if _matchRole(tk) then
-                        themeKey = tk
-                        break
-                    end
-                end
-                if themeKey == "user" then
-                    for tk in pairs(kwTable) do
-                        if tk ~= "user" and _matchRole(tk) then
-                            themeKey = tk
-                            break
-                        end
-                    end
-                end
-            end
-
-            if themeKey == "user" and isAdmin then
-                themeKey = "admin"
-            end
+            local themeKey = _NT_resolveThemeKey(playerName, playerUserId, isAdmin)
 
             if themeKey == "user" and displayName == playerName and player then
                 local robloxDisplayName = player:FindFirstChild("DisplayName")
@@ -2177,12 +2226,23 @@ function NametagSystem.Init(ctx)
         end
     end
 
+    local _NT_lastShown = {}
+    local _NT_pollAlive = true
+
+    local function _NT_evaluate(p)
+        local isAdm = _NT_isAdmin(p)
+        local show = DoesPlayerQualifyForNametag(p) and _NT_shouldShowNametag(p, isAdm)
+        return show, isAdm
+    end
+
     local function UpdateAll()
         for _, p in ipairs(_SvcPlr:GetPlayers()) do
+            local show, isAdm = _NT_evaluate(p)
+            _NT_lastShown[p.Name] = show
             local char = p.Character
             if char and char.Parent then
-                if DoesPlayerQualifyForNametag(p) then
-                    task.spawn(CreateCustomNametag, char, p.Name, _NT_isAdmin(p))
+                if show then
+                    task.spawn(CreateCustomNametag, char, p.Name, isAdm)
                 else
                     RemoveNametag(p.Name)
                 end
@@ -2191,17 +2251,66 @@ function NametagSystem.Init(ctx)
     end
     _NT_onConfigLoaded = UpdateAll
 
+    local function SetNametagHidden(playerOrName, hidden)
+        local pObj = typeof(playerOrName) == "Instance" and playerOrName
+            or _SvcPlr:FindFirstChild(tostring(playerOrName))
+        local pName = pObj and pObj.Name or tostring(playerOrName)
+        _NT_CONFIG.hiddenUsers = type(_NT_CONFIG.hiddenUsers) == "table" and _NT_CONFIG.hiddenUsers or {}
+        _NT_CONFIG.hiddenUsers[pName] = hidden and true or nil
+        if pObj then
+            local show, isAdm = _NT_evaluate(pObj)
+            _NT_lastShown[pName] = show
+            local char = pObj.Character
+            if show and char and char.Parent then
+                task.spawn(CreateCustomNametag, char, pName, isAdm)
+            elseif not show then
+                RemoveNametag(pName)
+            end
+        end
+    end
+
+    task.spawn(function()
+        while _NT_pollAlive and _tlAlive() do
+            task.wait(1)
+            for _, p in ipairs(_SvcPlr:GetPlayers()) do
+                local show, isAdm = _NT_evaluate(p)
+                local prev = _NT_lastShown[p.Name]
+                _NT_lastShown[p.Name] = show
+                if prev ~= nil and prev ~= show then
+                    local char = p.Character
+                    if show then
+                        if char and char.Parent then
+                            task.spawn(CreateCustomNametag, char, p.Name, isAdm)
+                        end
+                    else
+                        RemoveNametag(p.Name)
+                    end
+                end
+            end
+        end
+    end)
+
+    local function Destroy()
+        _NT_pollAlive = false
+        RemoveAll()
+    end
+
     local function _NT_hookPlayer(player)
         player.CharacterAdded:Connect(function(char)
             task.wait(0.5)
-            if char.Parent and DoesPlayerQualifyForNametag(player) then
-                CreateCustomNametag(char, player.Name, _NT_isAdmin(player))
+            if char.Parent then
+                local show, isAdm = _NT_evaluate(player)
+                _NT_lastShown[player.Name] = show
+                if show then
+                    CreateCustomNametag(char, player.Name, isAdm)
+                end
             end
         end)
     end
 
     _SvcPlr.PlayerAdded:Connect(_NT_hookPlayer)
     _SvcPlr.PlayerRemoving:Connect(function(player)
+        _NT_lastShown[player.Name] = nil
         RemoveNametag(player.Name)
     end)
     for _, player in ipairs(_SvcPlr:GetPlayers()) do
@@ -2218,6 +2327,8 @@ function NametagSystem.Init(ctx)
     NametagSystem.RemoveNametag = RemoveNametag
     NametagSystem.RemoveAll = RemoveAll
     NametagSystem.UpdateAll = UpdateAll
+    NametagSystem.SetNametagHidden = SetNametagHidden
+    NametagSystem.Destroy = Destroy
     NametagSystem.Config = _NT_CONFIG
 
     return {
@@ -2232,6 +2343,8 @@ function NametagSystem.Init(ctx)
         RemoveNametag = RemoveNametag,
         RemoveAll = RemoveAll,
         UpdateAll = UpdateAll,
+        SetNametagHidden = SetNametagHidden,
+        Destroy = Destroy,
     }
 end
 
