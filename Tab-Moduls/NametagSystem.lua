@@ -6,6 +6,10 @@ function NametagSystem.Init(ctx)
     ctx = type(ctx) == "table" and ctx or {}
     local game = ctx.game or game
     local _genv = ctx._genv or (getgenv and getgenv()) or _G or {}
+    local _prevDestroy = rawget(_genv, "_TL_NametagDestroy")
+    if type(_prevDestroy) == "function" then
+        pcall(_prevDestroy)
+    end
     local _SvcPlr = game:GetService("Players")
     local LocalPlayer = ctx.LocalPlayer or _SvcPlr.LocalPlayer
     local _safeIsFile = function(p)
@@ -1732,9 +1736,18 @@ function NametagSystem.Init(ctx)
         return true
     end
 
+    local function _NT_destroyTag(bb)
+        pcall(function()
+            bb:SetAttribute("NT_Removing", true)
+            bb:Destroy()
+        end)
+    end
+    local _NT_evaluate
     local creatingNametag = {}
+    local _NT_pollAlive = true
+    local _NT_instId = tostring(os.clock()) .. "_" .. tostring(math.random(1, 1000000000))
     local function CreateCustomNametag(character, playerName, isAdmin)
-        if not character then
+        if not character or not _NT_pollAlive then
             return
         end
         if not playerName or playerName == "" then
@@ -1746,9 +1759,7 @@ function NametagSystem.Init(ctx)
         if not DoesPlayerQualifyForNametag(pObj or playerName) then
             local existing = _findExistingBillboard(playerName)
             if existing then
-                pcall(function()
-                    existing:Destroy()
-                end)
+                _NT_destroyTag(existing)
             end
             return
         end
@@ -1756,9 +1767,7 @@ function NametagSystem.Init(ctx)
         if not _NT_shouldShowNametag(pObj or playerName, isAdmin) then
             local existing = _findExistingBillboard(playerName)
             if existing then
-                pcall(function()
-                    existing:Destroy()
-                end)
+                _NT_destroyTag(existing)
             end
             return
         end
@@ -1841,9 +1850,7 @@ function NametagSystem.Init(ctx)
 
             local existingBB = _findExistingBillboard(playerName)
             if existingBB then
-                pcall(function()
-                    existingBB:Destroy()
-                end)
+                _NT_destroyTag(existingBB)
             end
 
             local bbW = (_NT_CONFIG.layout and _NT_CONFIG.layout.billboardWidth) or 240
@@ -1852,6 +1859,7 @@ function NametagSystem.Init(ctx)
 
             local billboard = Instance.new("BillboardGui")
             billboard.Name = "CovertPeerTag_" .. playerName
+            billboard:SetAttribute("NT_Owner", _NT_instId)
             billboard.Adornee = head
             billboard.Size = UDim2.new(0, bbW, 0, bbH)
             billboard.StudsOffset = Vector3.new(0, offY, 0)
@@ -2092,6 +2100,28 @@ function NametagSystem.Init(ctx)
             billboard.Parent = head or character or _getGuiContainer()
 
             billboard.Destroying:Connect(function()
+                if billboard:GetAttribute("NT_Removing") or not _NT_pollAlive then
+                    return
+                end
+                task.delay(0.5, function()
+                    local pl = _SvcPlr:FindFirstChild(playerName)
+                    local char = pl and pl.Character
+                    if
+                        _NT_pollAlive
+                        and char
+                        and char.Parent
+                        and creatingNametag[playerName] ~= char
+                        and not _findExistingBillboard(playerName)
+                    then
+                        local show, isAdm = _NT_evaluate(pl)
+                        if show then
+                            CreateCustomNametag(char, playerName, isAdm)
+                        end
+                    end
+                end)
+            end)
+
+            billboard.Destroying:Connect(function()
                 _NT_stopGradientAnims(billboard)
             end)
 
@@ -2180,9 +2210,7 @@ function NametagSystem.Init(ctx)
         end
         local existing = _findExistingBillboard(pName)
         if existing then
-            pcall(function()
-                existing:Destroy()
-            end)
+            _NT_destroyTag(existing)
         end
         creatingNametag[pName] = nil
     end
@@ -2194,9 +2222,8 @@ function NametagSystem.Init(ctx)
     end
 
     local _NT_lastShown = {}
-    local _NT_pollAlive = true
 
-    local function _NT_evaluate(p)
+    _NT_evaluate = function(p)
         local isAdm = _NT_isAdmin(p)
         local show = DoesPlayerQualifyForNametag(p) and _NT_shouldShowNametag(p, isAdm)
         return show, isAdm
@@ -2240,7 +2267,6 @@ function NametagSystem.Init(ctx)
     task.spawn(function()
         while _NT_pollAlive and _tlAlive() do
             task.wait(1)
-            _NT_rebuildRoleIndex()
             for _, p in ipairs(_SvcPlr:GetPlayers()) do
                 local show, isAdm = _NT_evaluate(p)
                 local prev = _NT_lastShown[p.Name]
@@ -2261,8 +2287,18 @@ function NametagSystem.Init(ctx)
 
     local function Destroy()
         _NT_pollAlive = false
-        RemoveAll()
+        for _, p in ipairs(_SvcPlr:GetPlayers()) do
+            local bb = _findExistingBillboard(p.Name)
+            if bb and bb:GetAttribute("NT_Owner") == _NT_instId then
+                _NT_destroyTag(bb)
+            end
+            creatingNametag[p.Name] = nil
+        end
+        if rawget(_genv, "_TL_NametagDestroy") == Destroy then
+            _genv._TL_NametagDestroy = nil
+        end
     end
+    _genv._TL_NametagDestroy = Destroy
 
     local function _NT_hookPlayer(player)
         player.CharacterAdded:Connect(function(char)
