@@ -6,67 +6,14 @@ function NametagSystem.Init(ctx)
     ctx = type(ctx) == "table" and ctx or {}
     local game = ctx.game or game
     local _genv = ctx._genv or (getgenv and getgenv()) or _G or {}
-    local _SvcUIS = game:GetService("UserInputService")
-    local _SvcRS = game:GetService("RunService")
     local _SvcPlr = game:GetService("Players")
     local LocalPlayer = ctx.LocalPlayer or _SvcPlr.LocalPlayer
-    local ScreenGui = ctx.ScreenGui
-    local makePanel = ctx.makePanel
-        or function(name, accent)
-            local p = Instance.new("Frame")
-            p.Name = name
-            local c = Instance.new("ScrollingFrame", p)
-            c.Name = "Content"
-            return p, c
-        end
-    local C = ctx.C
-        or {
-            accent = Color3.fromRGB(0, 170, 255),
-            accent2 = Color3.fromRGB(0, 200, 255),
-            sub = Color3.fromRGB(150, 150, 150),
-            text = Color3.fromRGB(255, 255, 255),
-            panelBg = Color3.fromRGB(20, 20, 20),
-            bg3 = Color3.fromRGB(40, 40, 40),
-        }
-    local PANEL_W = ctx.PANEL_W or 540
-    local _sc = ctx._sc or {}
-    local _TL_refs = ctx._TL_refs or {}
-    local _TL_loadModule = ctx._TL_loadModule or function()
-        return nil
-    end
-    local _TL_VP = ctx._TL_VP or { isMobile = false, isTablet = false, isTouch = false, long = 800, short = 600 }
-
-    local _SvcGS = game:GetService("GuiService")
-    local _SvcRS = game:GetService("RunService")
-    local _SvcPlr = game:GetService("Players")
-
-    local _execName = "Unknown"
-    if type(identifyexecutor) == "function" then
-        pcall(function()
-            _execName = tostring(identifyexecutor())
-        end)
-    elseif type(getexecutorname) == "function" then
-        pcall(function()
-            _execName = tostring(getexecutorname())
-        end)
-    elseif rawget(_genv, "potassium") or rawget(_genv, "Potassium") then
-        _execName = "Potassium"
-    elseif rawget(_genv, "madium") or rawget(_genv, "Madium") then
-        _execName = "Madium"
-    elseif rawget(_genv, "real") or rawget(_genv, "Real") or rawget(_genv, "realexecutor") then
-        _execName = "Real"
-    end
-
     local _safeIsFile = function(p)
         if type(isfile) ~= "function" then
             return false
         end
         local ok, r = pcall(isfile, p)
         return (ok and r) and true or false
-    end
-    local _safeReadFile = function(p)
-        local ok, r = pcall(readfile, p)
-        return ok and r
     end
     local _safeWriteFile = function(p, d)
         if type(writefile) == "function" then
@@ -139,35 +86,6 @@ function NametagSystem.Init(ctx)
             return r
         end
         return nil
-    end
-
-    local _cam = workspace.CurrentCamera
-    local _vpSize = (_cam and _cam.ViewportSize) or Vector2.new(1280, 720)
-    local _isTouch = pcall(function()
-        return _SvcUIS.TouchEnabled
-    end) and _SvcUIS.TouchEnabled
-    local _isKbd = pcall(function()
-        return _SvcUIS.KeyboardEnabled
-    end) and _SvcUIS.KeyboardEnabled
-    local _shortDim = math.min(_vpSize.X, _vpSize.Y)
-    local _isMobile = _isTouch and not _isKbd and _shortDim < 500
-    local _isTablet = _isTouch and not _isKbd and _shortDim >= 500 and _shortDim < 900
-    local _uiScale = (_isMobile and 0.82) or (_isTablet and 0.90) or 1.0
-
-    local function _bindTouchClick(guiObj, callback)
-        if not guiObj then
-            return
-        end
-        pcall(function()
-            guiObj.InputBegan:Connect(function(input)
-                if
-                    input.UserInputType == Enum.UserInputType.MouseButton1
-                    or input.UserInputType == Enum.UserInputType.Touch
-                then
-                    callback(input)
-                end
-            end)
-        end)
     end
 
     local _SvcHttp = game:GetService("HttpService")
@@ -373,7 +291,7 @@ function NametagSystem.Init(ctx)
         return #out > 0 and table.concat(out) or "?"
     end
 
-    local _NT_GRADIENT_ANIM_INTERVAL = 0.05
+    local _NT_GRADIENT_ANIM_INTERVAL = 0.1
     local _NT_GRADIENT_ANIM_ALIVE = {}
     local function _NT_canAnimateGradient()
         return true
@@ -666,159 +584,198 @@ function NametagSystem.Init(ctx)
 
     _NT_CONFIG = _NT_deepCopy(_NT_DEFAULTS)
 
+    local _NT_remoteAdmins, _NT_remoteAdded = {}, {}
+    local function _NT_syncRemoteAdmins(source, roleUsers)
+        local cur = {}
+        for role, users in pairs(roleUsers) do
+            if type(users) == "table" and (role == "owner" or role == "admin" or role == "developer") then
+                for _, u in ipairs(users) do
+                    local k = tostring(u)
+                    cur[k] = true
+                    if not AdminNames[k] then
+                        _NT_remoteAdded[k] = true
+                    end
+                    AdminNames[k] = true
+                end
+            end
+        end
+        _NT_remoteAdmins[source] = cur
+        for k in pairs(_NT_remoteAdded) do
+            local still = false
+            for _, set in pairs(_NT_remoteAdmins) do
+                if set[k] then
+                    still = true
+                    break
+                end
+            end
+            if not still then
+                AdminNames[k] = nil
+                _NT_remoteAdded[k] = nil
+            end
+        end
+    end
+
+    local function _NT_fetchJson(url, attempts)
+        for i = 1, attempts do
+            local res = _safeHttpGet(url)
+            if res and #res > 5 then
+                local ok, json = pcall(function()
+                    return _SvcHttp:JSONDecode(res)
+                end)
+                return (ok and type(json) == "table") and json or nil
+            end
+            if i < attempts then
+                task.wait(3)
+            end
+        end
+        return nil
+    end
+
     local _NT_onConfigLoaded = nil
+
+    local function _NT_applyConfigJson(json)
+        if json.enabled ~= nil then
+            _NT_CONFIG.enabled = json.enabled
+        end
+        if json.targetUser ~= nil then
+            _NT_CONFIG.targetUser = json.targetUser
+        end
+        if type(json.showAllPlayers) == "boolean" then
+            _NT_CONFIG.showAllPlayers = json.showAllPlayers
+        end
+        if type(json.alwaysVisibleRoles) == "table" then
+            _NT_CONFIG.alwaysVisibleRoles = json.alwaysVisibleRoles
+        end
+        if json.roleUsers and type(json.roleUsers) == "table" then
+            _NT_CONFIG.roleUsers = _NT_CONFIG.roleUsers or {}
+            for role, users in pairs(json.roleUsers) do
+                _NT_CONFIG.roleUsers[role] = users
+            end
+            _NT_syncRemoteAdmins("config", json.roleUsers)
+        end
+        if json.roleLabels and type(json.roleLabels) == "table" then
+            _NT_CONFIG.roleLabels = json.roleLabels
+        end
+        if json.displayNames and type(json.displayNames) == "table" then
+            _NT_CONFIG.displayNames = json.displayNames
+        end
+        if json.roleDisplayNames and type(json.roleDisplayNames) == "table" then
+            _NT_CONFIG.roleDisplayNames = json.roleDisplayNames
+        end
+        if json.customAvatars and type(json.customAvatars) == "table" then
+            _NT_CONFIG.customAvatars = json.customAvatars
+        end
+        if json.userColorOverrides and type(json.userColorOverrides) == "table" then
+            _NT_CONFIG.userColorOverrides = json.userColorOverrides
+        end
+        if json.userGradientOverrides and type(json.userGradientOverrides) == "table" then
+            _NT_CONFIG.userGradientOverrides = json.userGradientOverrides
+        end
+        if json.profilePictures and type(json.profilePictures) == "table" then
+            _NT_CONFIG.profilePictures = _NT_CONFIG.profilePictures or {}
+            for k, v in pairs(json.profilePictures) do
+                _NT_CONFIG.profilePictures[k] = v
+            end
+        end
+        if json.tagImages and type(json.tagImages) == "table" then
+            _NT_CONFIG.tagImages = _NT_CONFIG.tagImages or {}
+            for k, v in pairs(json.tagImages) do
+                _NT_CONFIG.tagImages[k] = v
+            end
+        end
+        if json.roleKeywords and type(json.roleKeywords) == "table" then
+            _NT_CONFIG.roleKeywords = _NT_CONFIG.roleKeywords or {}
+            for k, v in pairs(json.roleKeywords) do
+                _NT_CONFIG.roleKeywords[k] = v
+            end
+        end
+        if json.animations and type(json.animations) == "table" then
+            _NT_CONFIG.animations = _NT_CONFIG.animations or {}
+            for k, v in pairs(json.animations) do
+                _NT_CONFIG.animations[k] = v
+            end
+        end
+        if json.particles and type(json.particles) == "table" then
+            _NT_CONFIG.particles = _NT_CONFIG.particles or {}
+            for k, v in pairs(json.particles) do
+                _NT_CONFIG.particles[k] = v
+            end
+        end
+        if json.gradients and type(json.gradients) == "table" then
+            _NT_CONFIG.gradients = _NT_CONFIG.gradients or {}
+            for k, v in pairs(json.gradients) do
+                _NT_CONFIG.gradients[k] = v
+            end
+        end
+        if json.themes and type(json.themes) == "table" then
+            _NT_CONFIG.themes = _NT_CONFIG.themes or {}
+            for k, v in pairs(json.themes) do
+                if type(v) == "table" then
+                    local merged = _NT_deepCopy(_NT_CONFIG.themes[k] or _NT_DEFAULTS.themes.user)
+                    for tk, tv in pairs(v) do
+                        merged[tk] = tv
+                    end
+                    _NT_CONFIG.themes[k] = merged
+                end
+            end
+        end
+        if json.layout and type(json.layout) == "table" then
+            _NT_CONFIG.layout = _NT_CONFIG.layout or {}
+            for k, v in pairs(json.layout) do
+                _NT_CONFIG.layout[k] = v
+            end
+        end
+    end
+
+    local function _NT_applyRolesJson(json)
+        if json.roleUsers and type(json.roleUsers) == "table" then
+            _NT_CONFIG.roleUsers = _NT_CONFIG.roleUsers or {}
+            for role, users in pairs(json.roleUsers) do
+                _NT_CONFIG.roleUsers[role] = users
+            end
+            _NT_syncRemoteAdmins("roles", json.roleUsers)
+        end
+        if json.nameOverrides and type(json.nameOverrides) == "table" then
+            for k, v in pairs(json.nameOverrides) do
+                NameOverrides[k] = v
+            end
+        end
+    end
+
     local function _NT_loadConfig()
         for k, v in pairs(_NT_DEFAULTS) do
             if _NT_CONFIG[k] == nil then
                 _NT_CONFIG[k] = _NT_deepCopy(v)
             end
         end
-        task.spawn(function()
-            pcall(function()
-                local cUrl = ctx.configUrl
-                    or "https://raw.githubusercontent.com/TLMenu/TLMenu.github.io/refs/heads/main/NametagConfig.json"
-                local res = _safeHttpGet(cUrl)
-                if res and #res > 5 then
-                    local ok, json = pcall(function()
-                        return _SvcHttp:JSONDecode(res)
-                    end)
-                    if ok and type(json) == "table" then
-                        if json.enabled ~= nil then
-                            _NT_CONFIG.enabled = json.enabled
-                        end
-                        if json.targetUser ~= nil then
-                            _NT_CONFIG.targetUser = json.targetUser
-                        end
-                        if type(json.showAllPlayers) == "boolean" then
-                            _NT_CONFIG.showAllPlayers = json.showAllPlayers
-                        end
-                        if type(json.alwaysVisibleRoles) == "table" then
-                            _NT_CONFIG.alwaysVisibleRoles = json.alwaysVisibleRoles
-                        end
-                        if json.roleUsers and type(json.roleUsers) == "table" then
-                            _NT_CONFIG.roleUsers = _NT_CONFIG.roleUsers or {}
-                            for role, users in pairs(json.roleUsers) do
-                                _NT_CONFIG.roleUsers[role] = users
-                                if
-                                    type(users) == "table"
-                                    and (role == "owner" or role == "admin" or role == "developer")
-                                then
-                                    for _, u in ipairs(users) do
-                                        AdminNames[tostring(u)] = true
-                                    end
-                                end
-                            end
-                        end
-                        if json.roleLabels and type(json.roleLabels) == "table" then
-                            _NT_CONFIG.roleLabels = json.roleLabels
-                        end
-                        if json.displayNames and type(json.displayNames) == "table" then
-                            _NT_CONFIG.displayNames = json.displayNames
-                        end
-                        if json.roleDisplayNames and type(json.roleDisplayNames) == "table" then
-                            _NT_CONFIG.roleDisplayNames = json.roleDisplayNames
-                        end
-                        if json.customAvatars and type(json.customAvatars) == "table" then
-                            _NT_CONFIG.customAvatars = json.customAvatars
-                        end
-                        if json.userColorOverrides and type(json.userColorOverrides) == "table" then
-                            _NT_CONFIG.userColorOverrides = json.userColorOverrides
-                        end
-                        if json.userGradientOverrides and type(json.userGradientOverrides) == "table" then
-                            _NT_CONFIG.userGradientOverrides = json.userGradientOverrides
-                        end
-                        if json.profilePictures and type(json.profilePictures) == "table" then
-                            _NT_CONFIG.profilePictures = _NT_CONFIG.profilePictures or {}
-                            for k, v in pairs(json.profilePictures) do
-                                _NT_CONFIG.profilePictures[k] = v
-                            end
-                        end
-                        if json.tagImages and type(json.tagImages) == "table" then
-                            _NT_CONFIG.tagImages = _NT_CONFIG.tagImages or {}
-                            for k, v in pairs(json.tagImages) do
-                                _NT_CONFIG.tagImages[k] = v
-                            end
-                        end
-                        if json.roleKeywords and type(json.roleKeywords) == "table" then
-                            _NT_CONFIG.roleKeywords = _NT_CONFIG.roleKeywords or {}
-                            for k, v in pairs(json.roleKeywords) do
-                                _NT_CONFIG.roleKeywords[k] = v
-                            end
-                        end
-                        if json.animations and type(json.animations) == "table" then
-                            _NT_CONFIG.animations = _NT_CONFIG.animations or {}
-                            for k, v in pairs(json.animations) do
-                                _NT_CONFIG.animations[k] = v
-                            end
-                        end
-                        if json.particles and type(json.particles) == "table" then
-                            _NT_CONFIG.particles = _NT_CONFIG.particles or {}
-                            for k, v in pairs(json.particles) do
-                                _NT_CONFIG.particles[k] = v
-                            end
-                        end
-                        if json.gradients and type(json.gradients) == "table" then
-                            _NT_CONFIG.gradients = _NT_CONFIG.gradients or {}
-                            for k, v in pairs(json.gradients) do
-                                _NT_CONFIG.gradients[k] = v
-                            end
-                        end
-                        if json.themes and type(json.themes) == "table" then
-                            _NT_CONFIG.themes = _NT_CONFIG.themes or {}
-                            for k, v in pairs(json.themes) do
-                                if type(v) == "table" then
-                                    local merged = _NT_deepCopy(_NT_CONFIG.themes[k] or _NT_DEFAULTS.themes.user)
-                                    for tk, tv in pairs(v) do
-                                        merged[tk] = tv
-                                    end
-                                    _NT_CONFIG.themes[k] = merged
-                                end
-                            end
-                        end
-                        if json.layout and type(json.layout) == "table" then
-                            _NT_CONFIG.layout = _NT_CONFIG.layout or {}
-                            for k, v in pairs(json.layout) do
-                                _NT_CONFIG.layout[k] = v
-                            end
-                        end
-                    end
-                end
-            end)
-            pcall(function()
-                local rUrl = ctx.rolesUrl
-                    or "https://raw.githubusercontent.com/TLMenu/TLMenu.github.io/refs/heads/main/NametagRoles.json"
-                local res = _safeHttpGet(rUrl)
-                if res and #res > 5 then
-                    local ok, json = pcall(function()
-                        return _SvcHttp:JSONDecode(res)
-                    end)
-                    if ok and type(json) == "table" then
-                        if json.roleUsers and type(json.roleUsers) == "table" then
-                            _NT_CONFIG.roleUsers = _NT_CONFIG.roleUsers or {}
-                            for role, users in pairs(json.roleUsers) do
-                                _NT_CONFIG.roleUsers[role] = users
-                                if
-                                    type(users) == "table"
-                                    and (role == "owner" or role == "admin" or role == "developer")
-                                then
-                                    for _, u in ipairs(users) do
-                                        AdminNames[tostring(u)] = true
-                                    end
-                                end
-                            end
-                        end
-                        if json.nameOverrides and type(json.nameOverrides) == "table" then
-                            for k, v in pairs(json.nameOverrides) do
-                                NameOverrides[k] = v
-                            end
-                        end
-                    end
-                end
-            end)
-
-            if _NT_onConfigLoaded then
+        local pending = 2
+        local function done()
+            pending = pending - 1
+            if pending == 0 and _NT_onConfigLoaded then
                 pcall(_NT_onConfigLoaded)
             end
+        end
+        task.spawn(function()
+            local json = _NT_fetchJson(
+                ctx.configUrl
+                    or "https://raw.githubusercontent.com/TLMenu/TLMenu.github.io/refs/heads/main/NametagConfig.json",
+                2
+            )
+            if json then
+                pcall(_NT_applyConfigJson, json)
+            end
+            done()
+        end)
+        task.spawn(function()
+            local json = _NT_fetchJson(
+                ctx.rolesUrl
+                    or "https://raw.githubusercontent.com/TLMenu/TLMenu.github.io/refs/heads/main/NametagRoles.json",
+                1
+            )
+            if json then
+                pcall(_NT_applyRolesJson, json)
+            end
+            done()
         end)
     end
     _NT_loadConfig()
@@ -1553,6 +1510,43 @@ function NametagSystem.Init(ctx)
         end
     end
 
+    local _NT_ROLE_PRIO = { owner = 7, developer = 6, admin = 5, moderator = 4, staff = 3, advertising = 2, user = 1 }
+    local _NT_roleIdx = nil
+    local function _NT_rebuildRoleIndex()
+        local idx = {}
+        for role, users in pairs(_NT_CONFIG.roleUsers or {}) do
+            if type(users) == "table" then
+                local prio = _NT_ROLE_PRIO[role] or 0
+                for _, u in ipairs(users) do
+                    local k = tostring(u):lower()
+                    local e = idx[k]
+                    if not e then
+                        e = { prio = 0 }
+                        idx[k] = e
+                    end
+                    if prio > e.prio then
+                        e.prio = prio
+                        e.role = role
+                    end
+                end
+            end
+        end
+        _NT_roleIdx = idx
+    end
+
+    local function _NT_lookupRole(nameLower, userId)
+        if not _NT_roleIdx then
+            _NT_rebuildRoleIndex()
+        end
+        local a = _NT_roleIdx[nameLower]
+        local b = userId and _NT_roleIdx[userId] or nil
+        local best = a and a.role
+        if b and b.role and (not best or b.prio > _NT_ROLE_PRIO[best]) then
+            best = b.role
+        end
+        return (a or b) ~= nil, best
+    end
+
     local function DoesPlayerQualifyForNametag(p)
         if not _NT_CONFIG or not _NT_CONFIG.enabled then
             return false
@@ -1605,17 +1599,8 @@ function NametagSystem.Init(ctx)
             return true
         end
 
-        if _NT_CONFIG.roleUsers then
-            for _, users in pairs(_NT_CONFIG.roleUsers) do
-                if type(users) == "table" then
-                    for _, u in ipairs(users) do
-                        local us = tostring(u)
-                        if us:lower() == pName:lower() or (pUserId ~= "" and us == pUserId) then
-                            return true
-                        end
-                    end
-                end
-            end
+        if _NT_lookupRole(pName:lower(), pUserId ~= "" and pUserId or nil) then
+            return true
         end
 
         return _NT_CONFIG.showAllPlayers ~= false or _NT_CONFIG.allPlayers == true
@@ -1640,7 +1625,6 @@ function NametagSystem.Init(ctx)
         return false
     end
 
-    local _NT_ROLE_PRIO = { owner = 7, developer = 6, admin = 5, moderator = 4, staff = 3, advertising = 2, user = 1 }
     local _NT_KEYWORD_ORDER = { "owner", "developer", "admin", "moderator", "staff", "advertising" }
 
     local function _NT_findOverride(playerName, playerUserId)
@@ -1658,20 +1642,9 @@ function NametagSystem.Init(ctx)
         local displayLower = (override and override.display or ""):lower()
         local nameLower = playerName:lower()
         local themeKey = "user"
-        local highestPrio = 0
-
-        for role, users in pairs(_NT_CONFIG.roleUsers or {}) do
-            for _, u in ipairs(type(users) == "table" and users or {}) do
-                local us = tostring(u)
-                if us:lower() == nameLower or (playerUserId and us == playerUserId) then
-                    local prio = _NT_ROLE_PRIO[role] or 0
-                    if prio > highestPrio then
-                        highestPrio = prio
-                        themeKey = role
-                    end
-                    break
-                end
-            end
+        local _, matched = _NT_lookupRole(nameLower, playerUserId)
+        if matched then
+            themeKey = matched
         end
 
         if themeKey == "user" then
@@ -1884,7 +1857,7 @@ function NametagSystem.Init(ctx)
             billboard.StudsOffset = Vector3.new(0, offY, 0)
             billboard.AlwaysOnTop = true
             billboard.LightInfluence = 0
-            billboard.MaxDistance = 250
+            billboard.MaxDistance = math.huge
 
             local card = Instance.new("Frame")
             card.Size = UDim2.new(1, 0, 1, 0)
@@ -2177,9 +2150,13 @@ function NametagSystem.Init(ctx)
                             if dist > dsNear then
                                 scale = math.clamp(1 - (dist - dsNear) / (dsFar - dsNear), dsMin, 1)
                             end
-                            cardScale.Scale = scale
+                            if cardScale.Scale ~= scale then
+                                cardScale.Scale = scale
+                            end
+                            task.wait(dist > dsFar and 0.5 or 0.15)
+                        else
+                            task.wait(0.15)
                         end
-                        task.wait(0.15)
                     end
                 end)
             end
@@ -2214,16 +2191,6 @@ function NametagSystem.Init(ctx)
         for _, p in ipairs(_SvcPlr:GetPlayers()) do
             RemoveNametag(p.Name)
         end
-        local container = _getGuiContainer()
-        if container then
-            for _, desc in ipairs(container:GetDescendants()) do
-                if desc:IsA("BillboardGui") and desc.Name:sub(1, 14) == "CovertPeerTag_" then
-                    pcall(function()
-                        desc:Destroy()
-                    end)
-                end
-            end
-        end
     end
 
     local _NT_lastShown = {}
@@ -2236,6 +2203,7 @@ function NametagSystem.Init(ctx)
     end
 
     local function UpdateAll()
+        _NT_rebuildRoleIndex()
         for _, p in ipairs(_SvcPlr:GetPlayers()) do
             local show, isAdm = _NT_evaluate(p)
             _NT_lastShown[p.Name] = show
@@ -2272,6 +2240,7 @@ function NametagSystem.Init(ctx)
     task.spawn(function()
         while _NT_pollAlive and _tlAlive() do
             task.wait(1)
+            _NT_rebuildRoleIndex()
             for _, p in ipairs(_SvcPlr:GetPlayers()) do
                 local show, isAdm = _NT_evaluate(p)
                 local prev = _NT_lastShown[p.Name]
