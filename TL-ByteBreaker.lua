@@ -137,7 +137,7 @@ local ATTACH_MODES = {
     bb_pussyspread   = { x = 0,    y = -2.45, z = -2.0,  osc = 1.5,  oscSpeed = 10 },
     bb_soh           = { y = 1,    headRelative = true },
     bb_shouldersit   = { x = 1.8,  y = 2.2,   z = 0 },
-    bb_shouldersitprincess = { x = 1.8,  y = -0.1,  z = -1.5 },
+    bb_shouldersitprincess = { x = 1.8,  y = -0.1,  z = -0.5 },
     bb_friend        = { x = 3,    y = 0,     z = 0 },
     bb_shit          = { x = 0,    y = 3.5,   z = -1.2 },
     bb_spidergrip    = { x = 0,    y = 0.2,   z = -0.8,  rotY = 180, osc = 0.35, oscSpeed = 0.8 },
