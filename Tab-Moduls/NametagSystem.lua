@@ -1,1288 +1,2362 @@
 --!nocheck
 
-local PlayerlistTab = {}
-PlayerlistTab.__index = PlayerlistTab
+local NametagSystem = {}
 
-local trackedStaff = {}
-local trackedCat = {}
-local staffCheckCache = {}
-
-local ROLE_COLORS = {
-    Owner      = Color3.fromRGB(255, 200, 0),
-    Admin      = Color3.fromRGB(220, 40, 40),
-    Moderator  = Color3.fromRGB(0, 170, 255),
-    Creator    = Color3.fromRGB(10, 45, 150),
-    Management = Color3.fromRGB(255, 140, 0),
-}
-local ROLE_FALLBACK_COLOR = Color3.fromRGB(90, 95, 110)
-
-local function sendStaffDetectorNotification(_TL_refs, title, text, color)
-    local settingsState = _TL_refs and _TL_refs._TL_settingsState
-    if settingsState and settingsState.notifications == false then return end
-    pcall(function()
-        local sendNotif = _TL_refs and _TL_refs._TL_sendNotif
-        if sendNotif then
-            sendNotif(title, text, 7, color or Color3.fromRGB(255, 80, 80))
-        end
-    end)
-end
-
-local function isPerkRole(roleName)
-    local s = tostring(roleName):lower()
-    return s:match("free admin") or s:match("vip") or s:match("donator") or s:match("premium")
-end
-
-local groupBaseRank = {}
-local function getGroupBaseRank(groupId)
-    if groupBaseRank[groupId] then return groupBaseRank[groupId] end
-    local ok, info = pcall(function() return game:GetService("GroupService"):GetGroupInfoAsync(groupId) end)
-    if not ok or type(info) ~= "table" or type(info.Roles) ~= "table" then return nil end
-    local base
-    for _, r in ipairs(info.Roles) do
-        if r.Rank > 0 and (not base or r.Rank < base) then base = r.Rank end
-    end
-    groupBaseRank[groupId] = base or 1
-    return groupBaseRank[groupId]
-end
-
-local function isThreatRole(roleName)
-    if not roleName then return false end
-    local s = tostring(roleName):lower()
-    if isPerkRole(roleName) then
-        return false
-    end
-    if s:match("admin") or s:match("mod") or s:match("owner") or s:match("creator")
-        or s:match("staff") or s:match("youtube") or s:match("tiktok") or s:match("twitch")
-        or s:match("tester") or s:match("developer") or s:match("manage") then
-        return true
-    end
-    return false
-end
-
-local function classifyRole(text)
-    if not text then return nil end
-    local s = tostring(text):lower()
-    if s:find("free admin", 1, true) then return nil end
-    if s:find("owner", 1, true) or s:find("besitzer", 1, true) then return "Owner" end
-    if s:find("manage", 1, true) or s:find("leitung", 1, true) then return "Management" end
-    if s:find("creator", 1, true) or s:find("youtube", 1, true) or s:find("tiktok", 1, true)
-        or s:find("twitch", 1, true) or s:find("video star", 1, true)
-        or s:find("influencer", 1, true) or s:find("streamer", 1, true) then
-        return "Creator"
-    end
-    if s:find("roblox staff", 1, true) or s:find("admin", 1, true) then return "Admin" end
-    if s:find("moderat", 1, true) or s:find("%f[%a]mod%f[%A]") or s:find("staff", 1, true) then
-        return "Moderator"
-    end
-    return nil
-end
-
-local function checkPlayerForStaff(plr, LocalPlayer)
-    if not plr or plr == LocalPlayer then return false, "" end
-    if not game:IsLoaded() then game.Loaded:Wait() end
-    local isGroupGame = game.CreatorType == Enum.CreatorType.Group
-    local creatorId = game.CreatorId
-
-    if not isGroupGame and plr.UserId == creatorId then
-        return true, "Game Owner", "Owner"
-    end
-    local ok, vipOwnerId = pcall(function() return (game :: any).VIPServerOwnerId end)
-    if ok and vipOwnerId and vipOwnerId ~= 0 and plr.UserId == vipOwnerId then
-        return true, "VIP Server Owner (Admin)", "Owner"
-    end
-    if isGroupGame then
-        local rank, roleName
-        for _ = 1, 3 do
-            local okRank, r = pcall(function() return plr:GetRankInGroup(creatorId) end)
-            local okRole, n = pcall(function() return plr:GetRoleInGroup(creatorId) end)
-            if okRank and okRole and type(r) == "number" then
-                rank, roleName = r, n
-                break
-            end
-            task.wait(1)
-        end
-        if rank and rank > 0 then
-            local roleStr = "Group Role: " .. tostring(roleName)
-            if rank == 255 then
-                return true, roleStr, "Owner"
-            end
-
-            local cat = classifyRole(roleName)
-            if not cat and not isPerkRole(roleName) and rank > (getGroupBaseRank(creatorId) or 99) then
-                cat = rank >= 200 and "Admin" or "Moderator"
-            end
-            if cat or isThreatRole(roleName) then
-                return true, roleStr, cat
-            end
-        end
-    end
-
-    local successRoblox, rankRoblox = pcall(function() return plr:GetRankInGroup(1200769) end)
-    if successRoblox and type(rankRoblox) == "number" and rankRoblox > 0 then
-        return true, "Roblox Staff", "Admin"
-    end
-
-    local successStar, rankStar = pcall(function() return plr:GetRankInGroup(4199740) end)
-    if successStar and type(rankStar) == "number" and rankStar > 0 then
-        return true, "Roblox Video Star", "Creator"
-    end
-
-    local adminSystemRole = nil
-    for attr, val in pairs(plr:GetAttributes()) do
-        local attrName = tostring(attr):lower()
-        if type(val) == "number" then
-            if (attrName:match("admin") or attrName:match("adonis")) and val >= 2 then
-                adminSystemRole = "Admin System (Level " .. tostring(val) .. ")"
-                break
-            end
-        elseif type(val) == "string" then
-            if isThreatRole(val) then
-                adminSystemRole = "In-Game Role (" .. tostring(val) .. ")"
-                break
-            end
-        end
-    end
-
-    if not adminSystemRole then
-        for _, obj in ipairs(plr:GetChildren()) do
-            if obj:IsA("StringValue") and isThreatRole(obj.Value) then
-                adminSystemRole = "In-Game Role (" .. tostring(obj.Value) .. ")"
-                break
-            end
-        end
-    end
-    if adminSystemRole then
-        return true, adminSystemRole
-    end
-
-    local char = plr.Character
-    if char and char:FindFirstChild("Head") then
-        for _, obj in ipairs(char.Head:GetChildren()) do
-            if obj:IsA("BillboardGui") then
-                for _, desc in ipairs(obj:GetDescendants()) do
-                    if desc:IsA("TextLabel") and isThreatRole(desc.Text) then
-                        return true, "Overhead Tag (" .. tostring(desc.Text) .. ")"
-                    end
-                end
-            end
-        end
-    end
-
-    local function checkTools(parent)
-        if not parent then return false, "" end
-        for _, tool in ipairs(parent:GetChildren()) do
-            if tool:IsA("Tool") or tool:IsA("HopperBin") then
-                local tName = tostring(tool.Name):lower()
-                if tName:match("f3x") or tName:match("btools") or tName:match("ban")
-                    or tName:match("kick") or tName:match("admin") then
-                    return true, "Admin Tool (" .. tostring(tool.Name) .. ")"
-                end
-            end
-        end
-        return false, ""
-    end
-
-    local hasTool, toolName = checkTools(plr:FindFirstChild("Backpack"))
-    if hasTool then return true, toolName end
-    if char then
-        local hasToolChar, toolNameChar = checkTools(char)
-        if hasToolChar then return true, toolNameChar end
-    end
-    return false, ""
-end
-
-local function getStaffInfo(plr)
-    local role = trackedStaff[plr]
-    if not role then return nil end
-    local label = tostring(role):gsub("^Group Role: ", "")
-    local cat = trackedCat[plr]
-    return label, (cat and ROLE_COLORS[cat]) or ROLE_FALLBACK_COLOR, cat
-end
-
-local function setStaffState(_TL_refs, plr, isStaff, role, notifyOnDetect, category)
-    local previousRole, previousCat = trackedStaff[plr], trackedCat[plr]
-    local normalizedRole = (isStaff and role and role ~= "") and role or nil
-    local cat = normalizedRole and (category or classifyRole(normalizedRole)) or nil
-    staffCheckCache[plr] = normalizedRole and { role = normalizedRole, cat = cat } or false
-    trackedStaff[plr] = normalizedRole
-    trackedCat[plr] = cat
-    if notifyOnDetect and normalizedRole and not previousRole then
-        sendStaffDetectorNotification(_TL_refs, "Staff/Creator detected",
-            plr.Name .. "\nRole: " .. normalizedRole, cat and ROLE_COLORS[cat])
-    end
-    if previousRole ~= normalizedRole or previousCat ~= cat then
-        local fn = _TL_refs and _TL_refs._TL_rebuildPlayerList
-        if type(fn) == "function" then fn() end
-    end
-end
-
-local function runStaffCheck(_TL_refs, plr, notifyOnDetect, delaySec, onDone, LocalPlayer)
-    if not plr or plr == LocalPlayer then
-        if onDone then onDone(false, "") end
-        return
-    end
-    task.spawn(function()
-        if delaySec and delaySec > 0 then
-            task.wait(delaySec)
-        end
-        if not plr.Parent then
-            if onDone then onDone(false, "") end
-            return
-        end
-        local cached = staffCheckCache[plr]
-        if cached ~= nil then
-            local isStaff = cached ~= false
-            setStaffState(_TL_refs, plr, isStaff, isStaff and cached.role or nil, notifyOnDetect, isStaff and cached.cat or nil)
-            if onDone then onDone(isStaff, isStaff and cached.role or "") end
-            return
-        end
-        local isStaff, role, cat = checkPlayerForStaff(plr, LocalPlayer)
-        setStaffState(_TL_refs, plr, isStaff, role, notifyOnDetect, cat)
-        if onDone then onDone(isStaff, role) end
-    end)
-end
-
-function PlayerlistTab.Init(ctx)
+function NametagSystem.Init(ctx)
     ctx = type(ctx) == "table" and ctx or {}
     local game = ctx.game or game
     local _genv = ctx._genv or (getgenv and getgenv()) or _G or {}
     local _SvcUIS = game:GetService("UserInputService")
-    local _SvcRS  = game:GetService("RunService")
-    local _SvcPlr = ctx.Players or game:GetService("Players")
-    local Players = _SvcPlr
-    local LocalPlayer = ctx.LocalPlayer or Players.LocalPlayer
-    local TweenService = game:GetService("TweenService")
-
-    local function corner(parent, r)
-        if ctx.corner then return ctx.corner(parent, r) end
-        if not parent then return nil end
-        local c = parent:FindFirstChildOfClass("UICorner") or Instance.new("UICorner")
-        c.CornerRadius = UDim.new(0, r or 8)
-        c.Parent = parent
-        return c
-    end
-
-    local function stroke(parent, thick, col, trans)
-        if ctx.stroke then return ctx.stroke(parent, thick, col, trans) end
-        if not parent then return nil end
-        local s = parent:FindFirstChildOfClass("UIStroke") or Instance.new("UIStroke")
-        s.Thickness = thick or 1
-        s.Color = col or Color3.fromRGB(255, 255, 255)
-        s.Transparency = trans or 0
-        s.Parent = parent
-        return s
-    end
-
-    local function _makeDummyStroke(parent, thick, col, trans)
-        if ctx._makeDummyStroke then return ctx._makeDummyStroke(parent, thick, col, trans) end
-        return stroke(parent, thick, col, trans)
-    end
-
-    local twP = ctx.twP or function(inst, dur, props, style, dir)
-        if not inst then return end
-        pcall(function()
-            local tw = TweenService:Create(
-                inst,
-                TweenInfo.new(dur or 0.15, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out),
-                props
-            )
-            tw:Play()
-        end)
-    end
-
-    local _tlTrackInst = ctx._tlTrackInst or function(inst)
-        local allInsts = _genv._TLAllInsts
-        if type(allInsts) == "table" and inst then
-            table.insert(allInsts, inst)
+    local _SvcRS = game:GetService("RunService")
+    local _SvcPlr = game:GetService("Players")
+    local LocalPlayer = ctx.LocalPlayer or _SvcPlr.LocalPlayer
+    local ScreenGui = ctx.ScreenGui
+    local makePanel = ctx.makePanel
+        or function(name, accent)
+            local p = Instance.new("Frame")
+            p.Name = name
+            local c = Instance.new("ScrollingFrame", p)
+            c.Name = "Content"
+            return p, c
         end
-        return inst
-    end
-
-    local getRootPart = ctx.getRootPart or function()
-        local char = LocalPlayer and LocalPlayer.Character
-        return char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso"))
-    end
-
-    local playHoverSound = ctx.playHoverSound or function()
-        pcall(function()
-            local sc = ctx._sc
-            if sc and type(sc._playHoverSound) == "function" then
-                sc._playHoverSound()
-            end
-        end)
-    end
-
-    local _C3_DEF_BG   = Color3.fromRGB(18, 18, 20)
-    local _C3_DEF_BG2  = Color3.fromRGB(26, 26, 28)
-    local _C3_DEF_BG3  = Color3.fromRGB(34, 34, 38)
-    local _C3_DEF_ACC  = Color3.fromRGB(0, 170, 255)
-    local _C3_DEF_SUB  = Color3.fromRGB(130, 135, 145)
-    local _C3_DEF_TXT  = Color3.fromRGB(255, 255, 255)
-
-    local C = ctx.C or {
-        accent = _C3_DEF_ACC,
-        accent2 = Color3.fromRGB(0, 200, 255),
-        sub = _C3_DEF_SUB,
-        text = _C3_DEF_TXT,
-        panelBg = _C3_DEF_BG,
-        bg2 = _C3_DEF_BG2,
-        bg3 = _C3_DEF_BG3,
-        panelHdr = _C3_DEF_BG2,
-    }
-    setmetatable(C, {
-        __index = function(_, k)
-            if k == "bg" or k == "bg1" or k == "panelBg" then return _C3_DEF_BG end
-            if k == "bg2" or k == "panelHdr" then return _C3_DEF_BG2 end
-            if k == "bg3" or k == "bg4" then return _C3_DEF_BG3 end
-            if k == "accent" or k == "accent2" then return _C3_DEF_ACC end
-            if k == "sub" or k == "sub2" then return _C3_DEF_SUB end
-            if k == "text" or k == "white" then return _C3_DEF_TXT end
-            return Color3.fromRGB(120, 120, 130)
-        end
-    })
-
+    local C = ctx.C
+        or {
+            accent = Color3.fromRGB(0, 170, 255),
+            accent2 = Color3.fromRGB(0, 200, 255),
+            sub = Color3.fromRGB(150, 150, 150),
+            text = Color3.fromRGB(255, 255, 255),
+            panelBg = Color3.fromRGB(20, 20, 20),
+            bg3 = Color3.fromRGB(40, 40, 40),
+        }
     local PANEL_W = ctx.PANEL_W or 540
-    local PlayerGui = ctx.PlayerGui or (LocalPlayer and (LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 5)))
-    local _C3_BG2 = ctx._C3_BG2 or C.bg2 or _C3_DEF_BG2
-    local _C3_BG3 = ctx._C3_BG3 or C.bg3 or _C3_DEF_BG3
+    local _sc = ctx._sc or {}
     local _TL_refs = ctx._TL_refs or {}
-    local _TL_activeThemeId = ctx._TL_activeThemeId or (_genv and _genv._TL_activeThemeId) or "default"
-    local panelColorHooks = ctx.panelColorHooks or (_genv and _genv._panelColorHooks) or {}
+    local _TL_loadModule = ctx._TL_loadModule or function()
+        return nil
+    end
+    local _TL_VP = ctx._TL_VP or { isMobile = false, isTablet = false, isTouch = false, long = 800, short = 600 }
 
-    local makePanel = ctx.makePanel or function(name, accent)
-        local p = Instance.new("Frame")
-        p.Name = name
-        p.Size = UDim2.new(0, PANEL_W, 0, 420)
-        p.BorderSizePixel = 0
-        local c = Instance.new("ScrollingFrame", p)
-        c.Name = "Content"
-        c.Size = UDim2.new(1, 0, 1, 0)
-        c.BackgroundTransparency = 1
-        c.BorderSizePixel = 0
-        c.ScrollBarThickness = 4
-        return p, c
+    local _SvcGS = game:GetService("GuiService")
+    local _SvcRS = game:GetService("RunService")
+    local _SvcPlr = game:GetService("Players")
+
+    local _execName = "Unknown"
+    if type(identifyexecutor) == "function" then
+        pcall(function()
+            _execName = tostring(identifyexecutor())
+        end)
+    elseif type(getexecutorname) == "function" then
+        pcall(function()
+            _execName = tostring(getexecutorname())
+        end)
+    elseif rawget(_genv, "potassium") or rawget(_genv, "Potassium") then
+        _execName = "Potassium"
+    elseif rawget(_genv, "madium") or rawget(_genv, "Madium") then
+        _execName = "Madium"
+    elseif rawget(_genv, "real") or rawget(_genv, "Real") or rawget(_genv, "realexecutor") then
+        _execName = "Real"
     end
 
-    local p, c = makePanel("Playerlist", C.accent)
-    p.BackgroundColor3 = C.panelBg
-    p.BackgroundTransparency = 0
-    local _eg = p:FindFirstChildOfClass("UIGradient"); if _eg then _eg:Destroy() end
-
-    local _OP_PlBgImg                  = Instance.new("ImageLabel")
-    _OP_PlBgImg.Name                   = "TLMenu_OP_PlBg"
-    _OP_PlBgImg.Size                   = UDim2.new(1, 0, 1, 0)
-    _OP_PlBgImg.Position               = UDim2.new(0, 0, 0, 0)
-    _OP_PlBgImg.BackgroundTransparency = 1
-    _OP_PlBgImg.Image                  = "rbxassetid://132090006833323"
-    _OP_PlBgImg.ScaleType              = Enum.ScaleType.Crop
-    _OP_PlBgImg.ImageTransparency      = 0.35
-    _OP_PlBgImg.ZIndex                 = 1
-    _OP_PlBgImg.Visible                = (_TL_activeThemeId == "onepiece")
-    _OP_PlBgImg.Parent                 = p
-    corner(_OP_PlBgImg, 12)
-    _TL_refs._OP_PlBgImg              = _OP_PlBgImg
-
-    local PAD                         = 16
-    local PW                          = PANEL_W - PAD * 2
-    local ROW_H_ACTUAL                = 70
-    local GAP                         = 6
-    local avatarCache                 = {}
-    local rowCache                    = {}
-    local espHighlights               = {}
-    local _plFilterText               = ""
-    local _currentDropdownH           = 0
-
-    local HEADER_H                    = 44
-    local SEARCH_ICON_ASSET           = "rbxassetid://3926305904"
-    local SEARCH_ICON_RECT_OFFSET     = Vector2.new(964, 324)
-    local SEARCH_ICON_RECT_SIZE       = Vector2.new(36, 36)
-
-    local countBadge                  = Instance.new("Frame", c)
-    countBadge.Size                   = UDim2.new(0, 36, 0, 20)
-    countBadge.Position               = UDim2.new(1, -PAD - 36, 0, 12)
-    countBadge.BackgroundColor3       = C.accent
-    countBadge.BackgroundTransparency = 0.72
-    countBadge.BorderSizePixel        = 0
-    corner(countBadge, 99)
-    local countLbl                    = Instance.new("TextLabel", countBadge)
-    countLbl.Size                     = UDim2.new(1, 0, 1, 0)
-    countLbl.BackgroundTransparency   = 1
-    countLbl.Font                     = Enum.Font.GothamBlack
-    countLbl.TextSize                 = 10
-    countLbl.TextColor3               = C.accent
-    countLbl.TextXAlignment           = Enum.TextXAlignment.Center
-    countLbl.Text                     = tostring(#Players:GetPlayers())
-
-    local searchFrame                 = Instance.new("Frame", c)
-    searchFrame.Name                  = "TL_PL_SearchFrame"
-    searchFrame.Size                  = UDim2.new(1, -PAD * 2, 0, 28)
-    searchFrame.Position              = UDim2.new(0, PAD, 0, 6)
-    searchFrame.BackgroundColor3      = C.bg2 or _C3_BG2
-    searchFrame.BackgroundTransparency = 0
-    searchFrame.BorderSizePixel       = 0
-    searchFrame.ClipsDescendants      = false
-    corner(searchFrame, 4)
-
-    local search_Stroke               = _makeDummyStroke(searchFrame)
-    search_Stroke.Thickness           = 1
-    search_Stroke.Color               = C.bg3 or _C3_BG3
-    search_Stroke.Transparency        = 0.3
-
-    local searchUnderline             = Instance.new("Frame", searchFrame)
-    searchUnderline.Name              = "TL_PL_SearchUnderline"
-    searchUnderline.AnchorPoint       = Vector2.new(0, 1)
-    searchUnderline.Size              = UDim2.new(1, 0, 0, 2)
-    searchUnderline.Position          = UDim2.new(0, 0, 1, 1)
-    searchUnderline.BackgroundColor3  = C.accent
-    searchUnderline.BackgroundTransparency = 1
-    searchUnderline.BorderSizePixel   = 0
-    searchUnderline.ZIndex            = 6
-
-    local searchIcon                  = Instance.new("ImageLabel", searchFrame)
-    searchIcon.Name                   = "TL_PL_SearchIcon"
-    searchIcon.Size                   = UDim2.new(0, 14, 0, 14)
-    searchIcon.Position               = UDim2.new(0, 10, 0.5, -7)
-    searchIcon.BackgroundTransparency = 1
-    searchIcon.Image                  = SEARCH_ICON_ASSET
-    searchIcon.ImageRectOffset        = SEARCH_ICON_RECT_OFFSET
-    searchIcon.ImageRectSize          = SEARCH_ICON_RECT_SIZE
-    searchIcon.ImageColor3            = C.sub or Color3.fromRGB(120, 120, 130)
-    searchIcon.ScaleType              = Enum.ScaleType.Fit
-
-    local searchBox                   = Instance.new("TextBox", searchFrame)
-    searchBox.Name                    = "TL_PL_SearchBox"
-    searchBox.Size                    = UDim2.new(1, -62, 1, 0)
-    searchBox.Position                = UDim2.new(0, 32, 0, 0)
-    searchBox.BackgroundTransparency  = 1
-    searchBox.Font                    = Enum.Font.Gotham
-    searchBox.TextSize                = 12
-    searchBox.TextColor3              = C.text or Color3.new(1, 1, 1)
-    searchBox.PlaceholderText         = "Search players"
-    searchBox.PlaceholderColor3       = C.sub or Color3.fromRGB(120, 120, 130)
-    searchBox.Text                    = ""
-    searchBox.ClearTextOnFocus        = false
-    searchBox.TextXAlignment          = Enum.TextXAlignment.Left
-    searchBox.ZIndex                  = 5
-
-    local searchClearBtn              = Instance.new("TextButton", searchFrame)
-    searchClearBtn.Name               = "TL_PL_SearchClear"
-    searchClearBtn.Size               = UDim2.new(0, 20, 0, 20)
-    searchClearBtn.AnchorPoint         = Vector2.new(1, 0.5)
-    searchClearBtn.Position            = UDim2.new(1, -6, 0.5, 0)
-    searchClearBtn.BackgroundTransparency = 1
-    searchClearBtn.Font                = Enum.Font.GothamBold
-    searchClearBtn.Text                = "\xC3\x97"
-    searchClearBtn.TextSize            = 14
-    searchClearBtn.TextColor3          = C.sub or Color3.fromRGB(120, 120, 130)
-    searchClearBtn.Visible             = false
-    searchClearBtn.ZIndex              = 6
-
-    searchBox.Focused:Connect(function()
-        twP(search_Stroke, 0.15, { Color = C.accent, Transparency = 0.45 })
-        twP(searchUnderline, 0.15, { BackgroundTransparency = 0 })
-    end)
-    searchBox.FocusLost:Connect(function()
-        twP(search_Stroke, 0.15, { Color = C.bg3 or _C3_BG3, Transparency = 0.3 })
-        if _plFilterText == "" then
-            twP(searchUnderline, 0.15, { BackgroundTransparency = 1 })
+    local _safeIsFile = function(p)
+        if type(isfile) ~= "function" then
+            return false
         end
-    end)
-
-    local DROPDOWN_ROW_H              = 40
-    local DROPDOWN_MAX_ROWS           = 6
-
-    local dropdownFrame               = Instance.new("Frame", c)
-    dropdownFrame.Name                = "TL_PL_Dropdown"
-    dropdownFrame.Size                = UDim2.new(1, -PAD * 2, 0, 0)
-    dropdownFrame.Position            = UDim2.new(0, PAD, 0, 6 + 28)
-    dropdownFrame.BackgroundColor3    = C.bg2 or _C3_BG2
-    dropdownFrame.BackgroundTransparency = 0
-    dropdownFrame.BorderSizePixel     = 0
-    dropdownFrame.ClipsDescendants    = true
-    dropdownFrame.Visible             = false
-    corner(dropdownFrame, 4)
-    local dropdownStroke              = _makeDummyStroke(dropdownFrame)
-    dropdownStroke.Thickness          = 1
-    dropdownStroke.Color              = C.bg3 or _C3_BG3
-    dropdownStroke.Transparency       = 0.3
-
-    local dropdownList                = Instance.new("ScrollingFrame", dropdownFrame)
-    dropdownList.Name                 = "TL_PL_DropdownList"
-    dropdownList.Size                 = UDim2.new(1, 0, 1, 0)
-    dropdownList.BackgroundTransparency = 1
-    dropdownList.BorderSizePixel      = 0
-    dropdownList.ScrollBarThickness   = 3
-    dropdownList.CanvasSize           = UDim2.new(0, 0, 0, 0)
-
-    local dropdownEmptyLbl            = Instance.new("TextLabel", dropdownFrame)
-    dropdownEmptyLbl.Name             = "TL_PL_DropdownEmpty"
-    dropdownEmptyLbl.Size             = UDim2.new(1, 0, 1, 0)
-    dropdownEmptyLbl.BackgroundTransparency = 1
-    dropdownEmptyLbl.Font             = Enum.Font.Gotham
-    dropdownEmptyLbl.TextSize         = 12
-    dropdownEmptyLbl.TextColor3       = C.sub or Color3.fromRGB(150, 150, 160)
-    dropdownEmptyLbl.Text             = "No player found"
-    dropdownEmptyLbl.Visible          = false
-
-    local dropdownRowCache            = {}
-    local _pickedUserId               = nil
-
-    local _SvcText = game:GetService("TextService")
-    local function pillWidth(label, minW, maxW)
-        local w
-        local ok, size = pcall(function()
-            return _SvcText:GetTextSize(label, 8, Enum.Font.GothamBold, Vector2.new(1000, 20))
-        end)
-        if ok and size then w = size.X else w = #label * 6 end
-        return math.clamp(math.ceil(w) + 18, minW, maxW)
+        local ok, r = pcall(isfile, p)
+        return (ok and r) and true or false
+    end
+    local _safeReadFile = function(p)
+        local ok, r = pcall(readfile, p)
+        return ok and r
+    end
+    local _safeWriteFile = function(p, d)
+        if type(writefile) == "function" then
+            pcall(writefile, p, d)
+        end
+    end
+    local _safeMakeFolder = function(p)
+        if type(makefolder) == "function" then
+            pcall(makefolder, p)
+        end
     end
 
-    local function getThreatRankInfo(pl)
-        local label, color = getStaffInfo(pl)
-        if not label then
-            return "Player", (C.bg3 or _C3_BG3), 0.35, (C.sub or Color3.fromRGB(120, 120, 130))
+    local _safeGetCustomAsset = function(p)
+        if type(getcustomasset) == "function" then
+            local ok, r = pcall(getcustomasset, p)
+            if ok and r and r ~= "" then
+                return r
+            end
         end
-        return label, color, 0.15, Color3.new(1, 1, 1)
+        if type(getsynasset) == "function" then
+            local ok, r = pcall(getsynasset, p)
+            if ok and r and r ~= "" then
+                return r
+            end
+        end
+        if type(getasset) == "function" then
+            local ok, r = pcall(getasset, p)
+            if ok and r and r ~= "" then
+                return r
+            end
+        end
+        if type(custom_asset) == "function" then
+            local ok, r = pcall(custom_asset, p)
+            if ok and r and r ~= "" then
+                return r
+            end
+        end
+        return nil
     end
 
-    local rebuildList
-    local selectPlayer
-
-    local function createDropdownRow(pl)
-        local row                     = Instance.new("TextButton", dropdownList)
-        row.Name                      = "ddRow_" .. pl.UserId
-        row.Size                      = UDim2.new(1, 0, 0, DROPDOWN_ROW_H)
-        row.BackgroundColor3          = C.bg2 or _C3_BG2
-        row.BackgroundTransparency    = 0
-        row.BorderSizePixel           = 0
-        row.AutoButtonColor           = false
-        row.Text                      = ""
-        row.ZIndex                    = 7
-
-        local avF                     = Instance.new("Frame", row)
-        avF.Size                      = UDim2.new(0, 26, 0, 26)
-        avF.Position                  = UDim2.new(0, 8, 0.5, -13)
-        avF.BackgroundColor3          = C.bg3 or _C3_BG3
-        avF.BackgroundTransparency    = 0.2
-        avF.BorderSizePixel           = 0
-        corner(avF, 99)
-        local clipF                   = Instance.new("Frame", avF)
-        clipF.Size                    = UDim2.new(1, 0, 1, 0)
-        clipF.BackgroundTransparency  = 1
-        clipF.ClipsDescendants        = true
-        corner(clipF, 99)
-        local avatar                  = Instance.new("ImageLabel", clipF)
-        avatar.Size                   = UDim2.new(1, 0, 1, 0)
-        avatar.BackgroundTransparency = 1
-        avatar.ScaleType              = Enum.ScaleType.Crop
-        avatar.ZIndex                 = 8
-        if avatarCache[pl.UserId] then
-            avatar.Image       = avatarCache[pl.UserId]
-            avatar.ImageColor3 = Color3.new(1, 1, 1)
-        else
-            avatar.Image       = "rbxassetid://142509179"
-            avatar.ImageColor3 = C.sub or Color3.fromRGB(100, 100, 110)
-            task.spawn(function()
-                local ok, url = pcall(function()
-                    return Players:GetUserThumbnailAsync(
-                        pl.UserId,
-                        Enum.ThumbnailType.HeadShot,
-                        Enum.ThumbnailSize.Size100x100
-                    )
-                end)
-                if ok and url and avatar.Parent then
-                    avatarCache[pl.UserId] = url
-                    avatar.Image           = url
-                    avatar.ImageColor3     = Color3.new(1, 1, 1)
-                end
-            end)
+    local _safeHttpRequest = function(reqOpts)
+        local reqFn = (type(request) == "function" and request)
+            or (type(http_request) == "function" and http_request)
+            or (type(syn) == "table" and type(syn.request) == "function" and syn.request)
+            or (type(http) == "table" and type(http.request) == "function" and http.request)
+        if reqFn then
+            local ok, res = pcall(reqFn, reqOpts)
+            if ok and res and res.Body then
+                return res.Body
+            end
         end
-
-        local nameLbl                 = Instance.new("TextLabel", row)
-        nameLbl.Size                  = UDim2.new(1, -140, 0, 16)
-        nameLbl.Position              = UDim2.new(0, 42, 0, 6)
-        nameLbl.BackgroundTransparency = 1
-        nameLbl.Font                  = Enum.Font.GothamBold
-        nameLbl.TextSize              = 12
-        nameLbl.TextColor3            = C.text or Color3.new(1, 1, 1)
-        nameLbl.TextXAlignment        = Enum.TextXAlignment.Left
-        nameLbl.TextTruncate          = Enum.TextTruncate.AtEnd
-        nameLbl.Text                  = pl.DisplayName
-
-        local userLbl                 = Instance.new("TextLabel", row)
-        userLbl.Size                  = UDim2.new(1, -140, 0, 12)
-        userLbl.Position              = UDim2.new(0, 42, 0, 21)
-        userLbl.BackgroundTransparency = 1
-        userLbl.Font                  = Enum.Font.Gotham
-        userLbl.TextSize              = 9
-        userLbl.TextColor3            = C.sub or Color3.fromRGB(120, 120, 130)
-        userLbl.TextXAlignment        = Enum.TextXAlignment.Left
-        userLbl.TextTruncate          = Enum.TextTruncate.AtEnd
-        userLbl.Text                  = "@" .. pl.Name
-
-        local rankLabel, rankBgCol, rankBgTrans, rankTextCol = getThreatRankInfo(pl)
-        local rankBg                  = Instance.new("Frame", row)
-        rankBg.Size                   = UDim2.new(0, pillWidth(rankLabel, 52, 96), 0, 16)
-        rankBg.AnchorPoint            = Vector2.new(1, 0.5)
-        rankBg.Position               = UDim2.new(1, -10, 0.5, 0)
-        rankBg.BackgroundColor3       = rankBgCol
-        rankBg.BackgroundTransparency = rankBgTrans
-        rankBg.BorderSizePixel        = 0
-        corner(rankBg, 99)
-        local rankTxt                 = Instance.new("TextLabel", rankBg)
-        rankTxt.Size                  = UDim2.new(1, 0, 1, 0)
-        rankTxt.BackgroundTransparency = 1
-        rankTxt.Font                  = Enum.Font.GothamBold
-        rankTxt.TextSize              = 8
-        rankTxt.Text                  = rankLabel
-        rankTxt.TextColor3            = rankTextCol
-        rankTxt.TextXAlignment        = Enum.TextXAlignment.Center
-        rankTxt.TextTruncate          = Enum.TextTruncate.AtEnd
-
-        row.MouseEnter:Connect(function()
-            playHoverSound()
-            twP(row, 0.08, { BackgroundColor3 = C.bg3 or _C3_BG3 })
-        end)
-        row.MouseLeave:Connect(function()
-            twP(row, 0.08, { BackgroundColor3 = C.bg2 or _C3_BG2 })
-        end)
-        row.MouseButton1Click:Connect(function()
-            if selectPlayer then selectPlayer(pl) end
-        end)
-
-        panelColorHooks[#panelColorHooks + 1] = function()
-            pcall(function() row.BackgroundColor3 = C.bg2 or _C3_BG2 end)
-            pcall(function() avF.BackgroundColor3 = C.bg3 or _C3_BG3 end)
-            pcall(function() nameLbl.TextColor3 = C.text end)
-            pcall(function() userLbl.TextColor3 = C.sub end)
-        end
-
-        return row
+        return nil
     end
 
-    local function rebuildDropdown()
-        local filter = _plFilterText:lower()
-        dropdownList:ClearAllChildren()
-        dropdownRowCache = {}
+    local _safeHttpGet = function(url)
+        if type(httpget) == "function" then
+            local ok, r = pcall(httpget, url)
+            if ok and r then
+                return r
+            end
+        end
+        local reqBody = _safeHttpRequest({ Url = url, Method = "GET" })
+        if reqBody and #reqBody >= 10 then
+            return reqBody
+        end
+        local ok, r = pcall(function()
+            return (game :: any):HttpGet(url)
+        end)
+        if ok and r then
+            return r
+        end
+        return nil
+    end
 
-        if filter == "" then
-            _currentDropdownH = 0
-            dropdownFrame.Visible = false
-            dropdownFrame.Size = UDim2.new(1, -PAD * 2, 0, 0)
+    local _cam = workspace.CurrentCamera
+    local _vpSize = (_cam and _cam.ViewportSize) or Vector2.new(1280, 720)
+    local _isTouch = pcall(function()
+        return _SvcUIS.TouchEnabled
+    end) and _SvcUIS.TouchEnabled
+    local _isKbd = pcall(function()
+        return _SvcUIS.KeyboardEnabled
+    end) and _SvcUIS.KeyboardEnabled
+    local _shortDim = math.min(_vpSize.X, _vpSize.Y)
+    local _isMobile = _isTouch and not _isKbd and _shortDim < 500
+    local _isTablet = _isTouch and not _isKbd and _shortDim >= 500 and _shortDim < 900
+    local _uiScale = (_isMobile and 0.82) or (_isTablet and 0.90) or 1.0
+
+    local function _bindTouchClick(guiObj, callback)
+        if not guiObj then
             return
         end
-
-        local matches = {}
-        for _, pl in ipairs(Players:GetPlayers()) do
-            if pl ~= LocalPlayer then
-                if pl.Name:lower():find(filter, 1, true) or pl.DisplayName:lower():find(filter, 1, true) then
-                    table.insert(matches, pl)
+        pcall(function()
+            guiObj.InputBegan:Connect(function(input)
+                if
+                    input.UserInputType == Enum.UserInputType.MouseButton1
+                    or input.UserInputType == Enum.UserInputType.Touch
+                then
+                    callback(input)
                 end
-            end
-        end
-        table.sort(matches, function(a, b) return a.Name < b.Name end)
-
-        dropdownFrame.Visible = true
-
-        if #matches == 0 then
-            _currentDropdownH = 48
-            dropdownEmptyLbl.Visible = true
-            dropdownFrame.Size = UDim2.new(1, -PAD * 2, 0, 48)
-            return
-        end
-
-        dropdownEmptyLbl.Visible = false
-        for i, pl in ipairs(matches) do
-            local row = createDropdownRow(pl)
-            row.Position = UDim2.new(0, 0, 0, (i - 1) * DROPDOWN_ROW_H)
-            dropdownRowCache[pl.UserId] = row
-        end
-
-        local visibleRows = math.min(#matches, DROPDOWN_MAX_ROWS)
-        _currentDropdownH = visibleRows * DROPDOWN_ROW_H
-        dropdownList.CanvasSize = UDim2.new(0, 0, 0, #matches * DROPDOWN_ROW_H)
-        dropdownFrame.Size = UDim2.new(1, -PAD * 2, 0, _currentDropdownH)
-    end
-
-    local hdrLine                     = Instance.new("Frame", c)
-    hdrLine.Size                      = UDim2.new(1, -PAD * 2, 0, 1)
-    hdrLine.Position                  = UDim2.new(0, PAD, 0, HEADER_H - 2)
-    hdrLine.BackgroundColor3          = C.bg3 or _C3_BG3
-    hdrLine.BackgroundTransparency    = 0.3
-    hdrLine.BorderSizePixel           = 0
-
-    local noResultsLbl                = Instance.new("TextLabel", c)
-    noResultsLbl.Size                 = UDim2.new(1, -PAD * 2, 1, -HEADER_H)
-    noResultsLbl.Position             = UDim2.new(0, PAD, 0, HEADER_H)
-    noResultsLbl.BackgroundTransparency = 1
-    noResultsLbl.Text                 = ""
-    noResultsLbl.Font                 = Enum.Font.Gotham
-    noResultsLbl.TextSize             = 13
-    noResultsLbl.TextColor3           = C.sub or Color3.fromRGB(150, 150, 160)
-    noResultsLbl.TextXAlignment       = Enum.TextXAlignment.Center
-    noResultsLbl.Visible              = false
-
-    local function makePillBtn(parent, xScale, xOff, w, label, accentC)
-        local col                = accentC or C.accent
-        local f                  = Instance.new("Frame", parent)
-        f.Size                   = UDim2.new(0, w, 0, 22)
-        f.Position               = UDim2.new(xScale, xOff, 0.5, -11)
-        f.BackgroundColor3       = col
-        f.BackgroundTransparency = 0.72
-        f.BorderSizePixel        = 0
-        corner(f, 6)
-        local s                  = _makeDummyStroke(f)
-        s.Thickness              = 0; s.Color = col; s.Transparency = 1
-        local tb                 = Instance.new("TextButton", f)
-        tb.Size                  = UDim2.new(1, 0, 1, 0)
-        tb.BackgroundTransparency = 1
-        tb.Text                  = label:upper()
-        tb.Font                  = Enum.Font.GothamBlack
-        tb.TextSize              = 9
-        tb.TextColor3            = col
-        tb.ZIndex                = 8
-        tb.Active                = true
-
-        local function onHover()
-            playHoverSound()
-            twP(f, 0.08, { BackgroundColor3 = col, BackgroundTransparency = 0.2 })
-            twP(tb, 0.08, { TextColor3 = Color3.new(1, 1, 1) })
-        end
-        local function onLeave()
-            twP(f, 0.12, { BackgroundColor3 = col, BackgroundTransparency = 0.72 })
-            twP(tb, 0.12, { TextColor3 = col })
-        end
-        tb.MouseEnter:Connect(onHover)
-        tb.MouseLeave:Connect(onLeave)
-        tb.InputBegan:Connect(function(inp)
-            if inp.UserInputType == Enum.UserInputType.Touch then onHover() end
+            end)
         end)
-        tb.InputEnded:Connect(function(inp)
-            if inp.UserInputType == Enum.UserInputType.Touch then onLeave() end
+    end
+
+    local _SvcHttp = game:GetService("HttpService")
+    local TweenService = game:GetService("TweenService")
+    local AdminNames = ctx.AdminNames or {}
+    local NameOverrides = ctx.NameOverrides or {}
+    local customUserAvatars = ctx.customUserAvatars or {}
+    local CoreGui = game:GetService("CoreGui")
+
+    local function _getGuiContainer()
+        if typeof(gethui) == "function" then
+            local ok, h = pcall(gethui)
+            if ok and h then
+                return h
+            end
+        end
+        local okC, cg = pcall(function()
+            return game:GetService("CoreGui")
         end)
-        return f, tb, s
+        if okC and cg then
+            local okTest, _ = pcall(function()
+                return cg:GetChildren()
+            end)
+            if okTest then
+                return cg
+            end
+        end
+        local lp = LocalPlayer or _SvcPlr.LocalPlayer
+        if lp then
+            local pg = lp:FindFirstChildOfClass("PlayerGui") or lp:FindFirstChild("PlayerGui")
+            if pg then
+                return pg
+            end
+        end
+        return CoreGui
     end
 
-    local function createRow(pl, yPos)
-        local isMe                  = (pl == LocalPlayer)
-        local col                   = isMe and (C.accent or Color3.fromRGB(120, 200, 255))
-            or C.accent2 or C.accent
-
-        local card                  = Instance.new("Frame", c)
-        card.Name                   = "plRow_" .. pl.UserId
-        card.Size                   = UDim2.new(1, -PAD * 2, 0, ROW_H_ACTUAL)
-        card.Position               = UDim2.new(0, PAD, 0, yPos)
-        card.BackgroundColor3       = C.bg2 or _C3_BG2
-        card.BackgroundTransparency = 0
-        card.BorderSizePixel        = 0
-        corner(card, 12)
-
-        local cStr                  = _makeDummyStroke(card)
-        cStr.Thickness              = 1
-        cStr.Color                  = C.bg3 or _C3_BG3
-        cStr.Transparency           = 0.35
-
-        local cdot                  = Instance.new("Frame", card)
-        cdot.Size                   = UDim2.new(0, 3, 0, ROW_H_ACTUAL - 18); cdot.Visible = false
-        cdot.Position               = UDim2.new(0, 0, 0.5, -(ROW_H_ACTUAL - 18) / 2)
-        cdot.BackgroundColor3       = col
-        cdot.BackgroundTransparency = 0.35
-        cdot.BorderSizePixel        = 0
-        corner(cdot, 99)
-
-        local avF                   = Instance.new("Frame", card)
-        avF.Name                    = "avF"
-        avF.Size                    = UDim2.new(0, 42, 0, 42)
-        avF.Position                = UDim2.new(0, 12, 0.5, -21)
-        avF.BackgroundColor3        = C.bg3 or _C3_BG3
-        avF.BackgroundTransparency  = 0.2
-        avF.BorderSizePixel         = 0
-        corner(avF, 99)
-        local clipF                 = Instance.new("Frame", avF)
-        clipF.Size                  = UDim2.new(1, 0, 1, 0)
-        clipF.BackgroundTransparency = 1
-        clipF.ClipsDescendants      = true
-        corner(clipF, 99)
-        local avatar                = Instance.new("ImageLabel", clipF)
-        avatar.Size                 = UDim2.new(1, 0, 1, 0)
-        avatar.BackgroundTransparency = 1
-        avatar.ScaleType            = Enum.ScaleType.Crop
-        avatar.ZIndex               = 4
-        if avatarCache[pl.UserId] then
-            avatar.Image       = avatarCache[pl.UserId]
-            avatar.ImageColor3 = Color3.new(1, 1, 1)
-        else
-            avatar.Image       = "rbxassetid://142509179"
-            avatar.ImageColor3 = C.sub or Color3.fromRGB(100, 100, 110)
-            task.spawn(function()
-                local ok, url = pcall(function()
-                    return Players:GetUserThumbnailAsync(
-                        pl.UserId,
-                        Enum.ThumbnailType.HeadShot,
-                        Enum.ThumbnailSize.Size100x100
-                    )
-                end)
-                if ok and url and avatar.Parent then
-                    avatarCache[pl.UserId] = url
-                    avatar.Image           = url
-                    avatar.ImageColor3     = Color3.new(1, 1, 1)
+    local function _findExistingBillboard(pName)
+        local p = _SvcPlr:FindFirstChild(pName)
+        if p and p.Character then
+            local h = p.Character:FindFirstChild("Head")
+            if h then
+                local b = h:FindFirstChild("CovertPeerTag_" .. pName)
+                if b then
+                    return b
                 end
-            end)
+            end
+            local bChar = p.Character:FindFirstChild("CovertPeerTag_" .. pName)
+            if bChar then
+                return bChar
+            end
         end
-        local ring                  = _makeDummyStroke(avF)
-        ring.Thickness              = 1.5
-        ring.Color                  = col
-        ring.Transparency           = 0.35
-
-        local NX                    = 62
-        local nameLbl               = Instance.new("TextLabel", card)
-        nameLbl.Size                = UDim2.new(0, PW - NX - 4, 0, 18)
-        nameLbl.Position            = UDim2.new(0, NX, 0, 8)
-        nameLbl.BackgroundTransparency = 1
-        nameLbl.Text                = pl.DisplayName
-        nameLbl.Font                = Enum.Font.GothamBold
-        nameLbl.TextSize            = 13
-        nameLbl.TextColor3          = C.text or Color3.new(1, 1, 1)
-        nameLbl.TextXAlignment      = Enum.TextXAlignment.Left
-        nameLbl.TextTruncate        = Enum.TextTruncate.AtEnd
-
-        local userLbl               = Instance.new("TextLabel", card)
-        userLbl.Size                = UDim2.new(0, 160, 0, 12)
-        userLbl.Position            = UDim2.new(0, NX, 0, 27)
-        userLbl.BackgroundTransparency = 1
-        userLbl.Text                = "@" .. pl.Name .. (isMe and "  \xE2\x98\x85" or "")
-        userLbl.Font                = Enum.Font.GothamBold
-        userLbl.TextSize            = 9
-        userLbl.TextColor3          = C.sub or Color3.fromRGB(120, 120, 130)
-        userLbl.TextXAlignment      = Enum.TextXAlignment.Left
-        userLbl.TextTruncate        = Enum.TextTruncate.AtEnd
-
-        local rankBg                = Instance.new("Frame", card)
-        rankBg.Size                 = UDim2.new(0, 52, 0, 14)
-        rankBg.Position             = UDim2.new(0, NX, 0, 42)
-        rankBg.BackgroundColor3     = C.bg3 or _C3_BG3
-        rankBg.BackgroundTransparency = 0.35
-        rankBg.BorderSizePixel      = 0
-        corner(rankBg, 99)
-        local rankTxt               = Instance.new("TextLabel", rankBg)
-        rankTxt.Size                = UDim2.new(1, 0, 1, 0)
-        rankTxt.BackgroundTransparency = 1
-        rankTxt.Font                = Enum.Font.GothamBold
-        rankTxt.TextSize            = 8
-        rankTxt.Text                = "Player"
-        rankTxt.TextColor3          = C.sub or Color3.fromRGB(120, 120, 130)
-        rankTxt.TextXAlignment      = Enum.TextXAlignment.Center
-        rankTxt.TextTruncate        = Enum.TextTruncate.AtEnd
-
-        local function refreshThreatBadge()
-            local label, bgCol, bgTrans, txtCol = getThreatRankInfo(pl)
-            rankBg.BackgroundColor3       = bgCol
-            rankBg.BackgroundTransparency = bgTrans
-            rankBg.Size                   = UDim2.new(0, pillWidth(label, 52, 130), 0, 14)
-            rankTxt.Text                  = label
-            rankTxt.TextColor3            = txtCol
-        end
-        refreshThreatBadge()
-
-        if not isMe and _TL_refs and _TL_refs._TL_checkThreatPlayer then
-            _TL_refs._TL_checkThreatPlayer(pl, function()
-                if card and card.Parent then
-                    refreshThreatBadge()
-                end
-            end)
-        end
-
-        local PW2, G2 = 44, 5
-
-        local espF, espBtn, espS = makePillBtn(card, 1, -PW2 - 8, PW2, "ESP", C.accent)
-        local espOn = false
-        local function setEsp(on)
-            espOn = on
-            if on then
-                espBtn.Text = "ESP \xF0\x9F\x92\x88"
-                twP(espF, 0.15, { BackgroundColor3 = C.accent, BackgroundTransparency = 0.75 })
-                twP(espS, 0.15, { Transparency = 0.1 })
-                twP(cStr, 0.15, { Color = C.accent, Transparency = 0.35 })
-                local char = pl.Character
-                if char and not espHighlights[pl] then
-                    local h               = _tlTrackInst(Instance.new("Highlight", PlayerGui))
-                    h.Name                = "TL_ESP_Highlight"
-                    h.Adornee             = char
-                    h.FillTransparency    = 1
-                    h.OutlineColor        = Color3.new(1, 1, 1)
-                    h.OutlineTransparency = 0
-                    espHighlights[pl]     = h
-                end
-            else
-                espBtn.Text = "ESP"
-                twP(espF, 0.15, { BackgroundColor3 = C.bg3 or _C3_BG3, BackgroundTransparency = 0.25 })
-                twP(espS, 0.15, { Transparency = 0.6 })
-                twP(cStr, 0.15, { Color = C.bg3 or _C3_BG3, Transparency = 0.35 })
-                if espHighlights[pl] then
-                    espHighlights[pl]:Destroy(); espHighlights[pl] = nil
+        local lp = LocalPlayer or _SvcPlr.LocalPlayer
+        if lp then
+            local pg = lp:FindFirstChildOfClass("PlayerGui")
+            if pg then
+                local b = pg:FindFirstChild("CovertPeerTag_" .. pName)
+                if b then
+                    return b
                 end
             end
         end
-        espBtn.MouseButton1Click:Connect(function() setEsp(not espOn) end)
-        espBtn.InputBegan:Connect(function(inp)
-            if inp.UserInputType == Enum.UserInputType.Touch then setEsp(not espOn) end
+        local c = _getGuiContainer()
+        if c then
+            local b = c:FindFirstChild("CovertPeerTag_" .. pName)
+            if b then
+                return b
+            end
+        end
+        return nil
+    end
+
+    local function _NT_safeFont(fontName, fallback)
+        fallback = fallback or Enum.Font.SourceSans
+        if not fontName then
+            return fallback
+        end
+        local ok, val = pcall(function()
+            return Enum.Font[fontName]
         end)
-
-        if not isMe then
-
-            local _, tpBtn = makePillBtn(card, 1, -PW2 - 8 - G2 - PW2, PW2, "TP", C.accent)
-            local function doTeleport()
-                if pl.Character then
-                    local tR = pl.Character:FindFirstChild("HumanoidRootPart")
-                    local mR = getRootPart()
-                    if tR and mR then mR.CFrame = tR.CFrame * CFrame.new(0, 0, 3.5) end
-                end
-            end
-            tpBtn.MouseButton1Click:Connect(doTeleport)
-            tpBtn.InputBegan:Connect(function(inp)
-                if inp.UserInputType == Enum.UserInputType.Touch then doTeleport() end
-            end)
-
-            local isSpectating           = false
-            local specCol                = C.accent2 or C.accent
-
-            local specF                  = Instance.new("Frame", card)
-            specF.Size                   = UDim2.new(0, PW2, 0, 22)
-            specF.Position               = UDim2.new(1, -PW2 - 8 - G2 - PW2 - G2 - PW2, 0.5, -11)
-            specF.BackgroundColor3       = C.bg3 or _C3_BG3
-            specF.BackgroundTransparency = 0.25
-            specF.BorderSizePixel        = 0
-            corner(specF, 6)
-            local specS2                 = _makeDummyStroke(specF)
-            specS2.Thickness             = 0; specS2.Color = specCol; specS2.Transparency = 0.6
-
-            local specImg                = Instance.new("TextButton", specF)
-            specImg.Size                 = UDim2.new(1, 0, 1, 0)
-            specImg.Position             = UDim2.new(0, 0, 0, 0)
-            specImg.BackgroundTransparency = 1
-            specImg.Text                 = "SPEC"
-            specImg.Font                 = Enum.Font.GothamBlack
-            specImg.TextSize             = 9
-            specImg.TextColor3           = specCol
-            specImg.ZIndex               = 8
-
-            local function setSpec(on)
-                isSpectating = on
-                local cam = workspace.CurrentCamera; if not cam then return end
-                if on then
-                    twP(specImg, 0.15, { TextColor3 = Color3.new(1, 1, 1) })
-                    twP(specF, 0.15, { BackgroundColor3 = specCol, BackgroundTransparency = 0.75 })
-                    twP(specS2, 0.15, { Transparency = 0.1 })
-                    local char = pl.Character
-                    if char then
-                        local hum = char:FindFirstChildOfClass("Humanoid")
-                        if hum then
-                            cam.CameraType = Enum.CameraType.Custom; cam.CameraSubject = hum
-                        end
-                    end
-                else
-                    twP(specImg, 0.15, { TextColor3 = specCol })
-                    twP(specF, 0.15, { BackgroundColor3 = C.bg3 or _C3_BG3, BackgroundTransparency = 0.25 })
-                    twP(specS2, 0.15, { Transparency = 0.6 })
-                    local myChar = LocalPlayer.Character
-                    if myChar then
-                        cam.CameraType    = Enum.CameraType.Custom
-                        cam.CameraSubject = myChar:FindFirstChildOfClass("Humanoid")
-                            or myChar:FindFirstChild("HumanoidRootPart")
-                    end
-                end
-            end
-
-            local function onSpecHover()
-                playHoverSound()
-                twP(specF, 0.08, { BackgroundColor3 = specCol, BackgroundTransparency = 0.2 })
-                if not isSpectating then twP(specImg, 0.08, { TextColor3 = Color3.new(1, 1, 1) }) end
-            end
-            local function onSpecLeave()
-                if not isSpectating then
-                    twP(specF, 0.12, { BackgroundColor3 = C.bg3 or _C3_BG3, BackgroundTransparency = 0.25 })
-                    twP(specImg, 0.12, { TextColor3 = specCol })
-                end
-            end
-
-            specImg.MouseEnter:Connect(onSpecHover)
-            specImg.MouseLeave:Connect(onSpecLeave)
-            specImg.InputBegan:Connect(function(inp)
-                if inp.UserInputType == Enum.UserInputType.Touch then onSpecHover() end
-            end)
-            specImg.InputEnded:Connect(function(inp)
-                if inp.UserInputType == Enum.UserInputType.Touch then onSpecLeave() end
-            end)
-            specImg.MouseButton1Click:Connect(function() setSpec(not isSpectating) end)
-
-            panelColorHooks[#panelColorHooks + 1] = function()
-                pcall(function() if specS2 then specS2.Color = C.accent2 or C.accent end end)
-                pcall(function() if specImg then specImg.TextColor3 = C.accent2 or C.accent end end)
-            end
+        if ok and val then
+            return val
         end
-
-        panelColorHooks[#panelColorHooks + 1] = function()
-            pcall(function() if espS then espS.Color = C.accent end end)
-            pcall(function() if ring then ring.Color = isMe and C.accent or (C.accent2 or C.accent) end end)
-            pcall(function() if cStr then cStr.Color = C.bg3 or _C3_BG3 end end)
-        end
-
-        card.MouseEnter:Connect(function()
-            playHoverSound()
-            twP(card, 0.1, { BackgroundColor3 = C.bg3 or _C3_BG3 })
-        end)
-        card.MouseLeave:Connect(function()
-            twP(card, 0.1, { BackgroundColor3 = C.bg2 or _C3_BG2 })
-        end)
-
-        rowCache[pl.UserId] = { row = card, refreshThreat = refreshThreatBadge }
-        return card
+        return fallback
     end
 
-    rebuildList = function()
-        local plrs      = Players:GetPlayers()
-        local activeIds = {}
+    local _DEFAULT_BOLD = _NT_safeFont("GothamBold", _NT_safeFont("SourceSansBold"))
+    local _DEFAULT_REGULAR = _NT_safeFont("Gotham", _NT_safeFont("SourceSans"))
 
-        for _, pl in ipairs(plrs) do activeIds[pl.UserId] = true end
-        for uid, entry in pairs(rowCache) do
-            if not activeIds[uid] then
-                entry.row:Destroy(); rowCache[uid] = nil
-            end
-        end
-
-        if _plFilterText ~= "" then
-            for _, entry in pairs(rowCache) do entry.row.Visible = false end
-            noResultsLbl.Visible = false
-            hdrLine.Visible = false
-            local panelH = HEADER_H + 6 + _currentDropdownH + 16
-            p.Size = UDim2.new(0, PANEL_W, 0, panelH)
-            c.CanvasSize = UDim2.new(0, 0, 0, panelH)
-            if countLbl and countLbl.Parent then countLbl.Text = tostring(#plrs) end
-            return
-        end
-
-        hdrLine.Visible = true
-
-        table.sort(plrs, function(a, b)
-            local aMod = _TL_refs and _TL_refs._TL_isThreatPlayer and _TL_refs._TL_isThreatPlayer(a) or false
-            local bMod = _TL_refs and _TL_refs._TL_isThreatPlayer and _TL_refs._TL_isThreatPlayer(b) or false
-            if aMod ~= bMod then return aMod end
-            return a.Name < b.Name
-        end)
-
-        local visIdx = 0
-        for _, pl in ipairs(plrs) do
-            if pl ~= LocalPlayer then
-                local show = (_pickedUserId == nil) or (_pickedUserId == pl.UserId)
-                local entry = rowCache[pl.UserId]
-                if show then
-                    local yPos = HEADER_H + visIdx * (ROW_H_ACTUAL + GAP) + 4
-                    if entry then
-                        entry.row.Position = UDim2.new(0, PAD, 0, yPos)
-                        entry.row.Visible  = true
-                        if entry.refreshThreat then entry.refreshThreat() end
-                    else
-                        createRow(pl, yPos)
-                    end
-                    visIdx = visIdx + 1
-                else
-                    if entry then entry.row.Visible = false end
-                end
-            end
-        end
-
-        local total = #plrs
-        if countLbl and countLbl.Parent then
-            countLbl.Text = tostring(total)
-        end
-
-        local contentH = HEADER_H + visIdx * (ROW_H_ACTUAL + GAP) + 16
-
-        if visIdx == 0 and _pickedUserId ~= nil then
-            _pickedUserId = nil
-            noResultsLbl.Visible = false
-            c.CanvasSize = UDim2.new(0, 0, 0, 0)
-        else
-            noResultsLbl.Visible = false
-            c.CanvasSize = UDim2.new(0, 0, 0, math.max(ROW_H_ACTUAL, contentH))
-        end
-
-        local minH = HEADER_H + (ROW_H_ACTUAL + GAP) * 3 + 16
-        p.Size = UDim2.new(0, PANEL_W, 0, math.max(minH, math.min(contentH, 420)))
-    end
-
-    selectPlayer = function(pl)
-        _pickedUserId = pl.UserId
-        searchBox.Text = ""
-    end
-
-    searchBox:GetPropertyChangedSignal("Text"):Connect(function()
-        _plFilterText = searchBox.Text or ""
-        searchClearBtn.Visible = (_plFilterText ~= "")
-        if _plFilterText ~= "" then
-            _pickedUserId = nil
-            twP(searchUnderline, 0.15, { BackgroundTransparency = 0 })
-        elseif not searchBox:IsFocused() then
-            twP(searchUnderline, 0.15, { BackgroundTransparency = 1 })
-        end
-        rebuildDropdown()
-        rebuildList()
-    end)
-
-    searchClearBtn.MouseButton1Click:Connect(function()
-        searchBox.Text = ""
-        searchBox:CaptureFocus()
-    end)
-
-    panelColorHooks[#panelColorHooks + 1] = function()
-        pcall(function() p.BackgroundColor3 = C.panelBg end)
-        pcall(function() countBadge.BackgroundColor3 = C.accent end)
-        pcall(function() countLbl.TextColor3 = C.accent end)
-        pcall(function() hdrLine.BackgroundColor3 = C.bg3 or _C3_BG3 end)
-        pcall(function() searchFrame.BackgroundColor3 = C.bg2 or _C3_BG2 end)
-        pcall(function() search_Stroke.Color = C.bg3 or _C3_BG3 end)
-        pcall(function() searchUnderline.BackgroundColor3 = C.accent end)
-        pcall(function() searchIcon.ImageColor3 = C.sub end)
-        pcall(function() searchBox.TextColor3 = C.text end)
-        pcall(function() searchBox.PlaceholderColor3 = C.sub end)
-        pcall(function() searchClearBtn.TextColor3 = C.sub end)
-        pcall(function() dropdownFrame.BackgroundColor3 = C.bg2 or _C3_BG2 end)
-        pcall(function() dropdownStroke.Color = C.bg3 or _C3_BG3 end)
-        pcall(function() dropdownEmptyLbl.TextColor3 = C.sub end)
-
-        for _, ch in ipairs(p:GetChildren()) do
-            pcall(function()
-                if ch:IsA("Frame") and ch.Size.Y.Offset == 48 then
-                    ch.BackgroundColor3 = C.panelHdr
-                end
-            end)
-        end
-
-        for _, entry in pairs(rowCache) do
-            pcall(function()
-                local card = entry.row
-                if card and card.Parent then
-                    card.BackgroundColor3 = C.bg2 or _C3_BG2
-                    local str = card:FindFirstChildOfClass("UIStroke")
-                    if str then str.Color = C.bg3 or _C3_BG3 end
-                    local avF = card:FindFirstChild("avF")
-                    if avF then avF.BackgroundColor3 = C.bg3 or _C3_BG3 end
-                    for _, lbl in ipairs(card:GetDescendants()) do
-                        if lbl:IsA("TextLabel") then
-                            local fs = lbl.TextSize
-                            if fs >= 13 then
-                                lbl.TextColor3 = C.text
-                            else
-                                lbl.TextColor3 = C.sub
-                            end
-                        end
-                    end
-                    for _, pill in ipairs(card:GetDescendants()) do
-                        if pill:IsA("Frame") and pill:FindFirstChildOfClass("UICorner") and pill:FindFirstChildOfClass("TextButton") then
-                            local uc = pill:FindFirstChildOfClass("UICorner")
-                            if uc and uc.CornerRadius.Scale >= 0.5 then
-                                pcall(function() pill.BackgroundColor3 = C.accent end)
-                                local tb2 = pill:FindFirstChildOfClass("TextButton")
-                                if tb2 then tb2.TextColor3 = C.accent end
-                            end
-                        end
-                    end
-                    if entry.refreshThreat then entry.refreshThreat() end
-                end
-            end)
-        end
-    end
-
-    _TL_refs._TL_rebuildPlayerList = rebuildList
-    _TL_refs._TL_isThreatPlayer = function(plr)
-        return trackedStaff[plr] ~= nil
-    end
-    _TL_refs._TL_getThreatRole = function(plr)
-        return trackedStaff[plr]
-    end
-    _TL_refs._TL_getThreatCategory = function(plr)
-        return trackedCat[plr]
-    end
-    _TL_refs._TL_checkThreatPlayer = function(plr, callback)
-        runStaffCheck(_TL_refs, plr, false, 0, callback, LocalPlayer)
-    end
-
-    rebuildList()
-
-    for _, pl in ipairs(Players:GetPlayers()) do
-        runStaffCheck(_TL_refs, pl, true, 0, nil, LocalPlayer)
-    end
-    task.spawn(function()
-        task.wait(1.2)
-        if not next(trackedStaff) then
-            sendStaffDetectorNotification(_TL_refs, "TLMenuSystem", "ModScan Completed!")
-        end
-    end)
-
-    Players.PlayerAdded:Connect(function(pl)
-        task.wait(0.15)
-        rebuildDropdown()
-        rebuildList()
-        runStaffCheck(_TL_refs, pl, true, 3, nil, LocalPlayer)
-    end)
-
-    Players.PlayerRemoving:Connect(function(pl)
-        task.wait(0.15)
-        local entry = rowCache[pl.UserId]
-        if entry then
-            entry.row:Destroy(); rowCache[pl.UserId] = nil
-        end
-        if _pickedUserId == pl.UserId then _pickedUserId = nil end
-        staffCheckCache[pl] = nil
-        if trackedStaff[pl] then
-            local role = trackedStaff[pl]
-            local leftCat = trackedCat[pl]
-            trackedStaff[pl] = nil
-            trackedCat[pl] = nil
-            sendStaffDetectorNotification(_TL_refs, "TLMenuSystem: Staff/Creator left",
-                pl.Name .. "\nRole: " .. role .. "\nLeft the server.", leftCat and ROLE_COLORS[leftCat])
-            local fn = _TL_refs and _TL_refs._TL_rebuildPlayerList
-            if type(fn) == "function" then fn() end
-            if not next(trackedStaff) then
-                task.delay(1, function()
-                    if not next(trackedStaff) then
-                        sendStaffDetectorNotification(_TL_refs, "TLMenuSystem:", "No Admin/Content-Creator Ingame.")
-                    end
-                end)
-            end
-        end
-        rebuildDropdown()
-        rebuildList()
-    end)
-
-    PlayerlistTab.rebuildList = rebuildList
-    PlayerlistTab.rowCache = rowCache
-    PlayerlistTab.avatarCache = avatarCache
-    PlayerlistTab.panel = p
-    PlayerlistTab.content = c
-
-    return p, c
-end
-
-function PlayerlistTab.new()
-    local obj = {
-        _panel = nil,
-        _content = nil,
+    local _NT_FONT_MAP = {
+        ["GothamBold"] = _NT_safeFont("GothamBold", _DEFAULT_BOLD),
+        ["Gotham"] = _NT_safeFont("Gotham", _DEFAULT_REGULAR),
+        ["GothamMedium"] = _NT_safeFont("GothamMedium", _DEFAULT_BOLD),
+        ["GothamBlack"] = _NT_safeFont("GothamBlack", _DEFAULT_BOLD),
+        ["GothamLight"] = _NT_safeFont("GothamLight", _DEFAULT_REGULAR),
+        ["GothamThin"] = _NT_safeFont("GothamThin", _DEFAULT_REGULAR),
+        ["SourceSans"] = _NT_safeFont("SourceSans"),
+        ["SourceSansBold"] = _NT_safeFont("SourceSansBold"),
+        ["SourceSansLight"] = _NT_safeFont("SourceSansLight"),
+        ["SourceSansSemibold"] = _NT_safeFont("SourceSansSemibold"),
+        ["Cartoon"] = _NT_safeFont("Cartoon"),
+        ["Highway"] = _NT_safeFont("Highway"),
+        ["SciFi"] = _NT_safeFont("SciFi"),
+        ["Arial"] = _NT_safeFont("Arial"),
+        ["ArialBold"] = _NT_safeFont("ArialBold"),
+        ["Ubuntu"] = _NT_safeFont("Ubuntu"),
+        ["UbuntuBold"] = _NT_safeFont("UbuntuBold"),
+        ["Code"] = _NT_safeFont("Code"),
+        ["CartoonBold"] = _NT_safeFont("CartoonBold"),
     }
-    return setmetatable(obj, PlayerlistTab)
-end
 
-function PlayerlistTab:Build(cfg)
-    local p, c = PlayerlistTab.Init(cfg)
-    self._panel = p
-    self._content = c
-    return p, c
-end
-
-function PlayerlistTab:Refresh()
-    if PlayerlistTab.rebuildList then
-        PlayerlistTab.rebuildList()
+    local _TL_safeGetCustomAsset = ctx._TL_safeGetCustomAsset or _safeGetCustomAsset
+    local _tlAlive = ctx._tlAlive or function()
+        return true
     end
+
+    local _NT_assetCache, _NT_assetFail = {}, {}
+    local function _NT_resolveAsset(file, url)
+        if type(url) == "number" then
+            url = "rbxassetid://" .. tostring(math.floor(url))
+        end
+        if type(file) == "string" and file ~= "" then
+            if _NT_assetCache[file] then
+                return _NT_assetCache[file]
+            end
+            local asset = _TL_safeGetCustomAsset(file)
+            local failedAt = _NT_assetFail[file]
+            if
+                not asset
+                and type(url) == "string"
+                and url ~= ""
+                and (not failedAt or os.clock() - failedAt > 60)
+                and type(writefile) == "function"
+                and not _safeIsFile(file)
+            then
+                local body = _safeHttpGet(url)
+                if body and #body > 10 and body:sub(1, 3) ~= "404" and body:sub(1, 1) ~= "<" then
+                    local path = ""
+                    for seg in file:gmatch("([^/]+)/") do
+                        path = path .. seg
+                        _safeMakeFolder(path)
+                        path = path .. "/"
+                    end
+                    _safeWriteFile(file, body)
+                    asset = _TL_safeGetCustomAsset(file) or _safeGetCustomAsset(file)
+                end
+                if not asset then
+                    _NT_assetFail[file] = os.clock()
+                end
+            end
+            if asset then
+                _NT_assetCache[file] = asset
+                return asset
+            end
+        end
+        if type(url) == "string" and url ~= "" then
+            if
+                url:find("^rbxassetid://")
+                or url:find("^rbxasset://")
+                or url:find("^rbxthumb://")
+                or url:find("^https?://www%.roblox%.com/asset")
+            then
+                return url
+            end
+        end
+        return nil
+    end
+    local function twP(obj, dur, props, style, dir)
+        return TweenService:Create(
+            obj,
+            TweenInfo.new(dur, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out),
+            props
+        )
+    end
+    local ownerProfilePicUrl = ctx.ownerProfilePicUrl
+        or "https://raw.githubusercontent.com/TLMenu/TLASSETS/main/ROLE-ICONS/TL-OWNER.png"
+    local ownerProfilePicFileName = ctx.ownerProfilePicFileName or "assets/ROLE-ICONS/TL-OWNER.png"
+    local userProfilePicUrl = ctx.userProfilePicUrl or ""
+    local userProfilePicFileName = ctx.userProfilePicFileName or ""
+
+    local function _NT_getInitials(name)
+        name = tostring(name or "")
+        if name == "" then
+            return "?"
+        end
+        local parts = {}
+        for word in name:gmatch("%S+") do
+            local ch = word:match(utf8.charpattern)
+            if ch then
+                table.insert(parts, ch:upper())
+            end
+        end
+        if #parts >= 2 then
+            return parts[1] .. parts[2]
+        end
+        local out = {}
+        for ch in name:gmatch(utf8.charpattern) do
+            out[#out + 1] = ch:upper()
+            if #out == 2 then
+                break
+            end
+        end
+        return #out > 0 and table.concat(out) or "?"
+    end
+
+    local _NT_GRADIENT_ANIM_INTERVAL = 0.05
+    local _NT_GRADIENT_ANIM_ALIVE = {}
+    local function _NT_canAnimateGradient()
+        return true
+    end
+    local function _NT_stopGradientAnims(target)
+        if not target then
+            return
+        end
+        for i = #_NT_GRADIENT_ANIM_ALIVE, 1, -1 do
+            local a = _NT_GRADIENT_ANIM_ALIVE[i]
+            if a and (a.parent == target or (typeof(a.parent) == "Instance" and a.parent:IsDescendantOf(target))) then
+                a.alive = false
+                table.remove(_NT_GRADIENT_ANIM_ALIVE, i)
+            end
+        end
+    end
+
+    local _NT_EASING_MAP = {
+        ["Quad"] = Enum.EasingStyle.Quad,
+        ["Linear"] = Enum.EasingStyle.Linear,
+        ["Sine"] = Enum.EasingStyle.Sine,
+        ["Expo"] = Enum.EasingStyle.Exponential,
+        ["Exponential"] = Enum.EasingStyle.Exponential,
+        ["Back"] = Enum.EasingStyle.Back,
+        ["Bounce"] = Enum.EasingStyle.Bounce,
+        ["Elastic"] = Enum.EasingStyle.Elastic,
+    }
+
+    local _NT_DEFAULTS = {
+        enabled = true,
+        showAllPlayers = true,
+        alwaysVisibleRoles = { "owner", "developer", "admin", "moderator", "staff" },
+        hiddenUsers = {},
+        themes = {
+            user = {
+                bg = "#1A1A22",
+                avatarBg = "#1F1F2C",
+                avatarText = "#A0A0C0",
+                divider = "#A0A0C0",
+                border = "#A0A0B4",
+                nameText = "#E6E6F0",
+                roleText = "#7878A0",
+                bgGradient = false,
+                bgGradientType = "linear",
+                bgGradientColors = { "#1A1A22", "#0E0E18" },
+                bgGradientAngle = 0,
+                bgGradientStart = "#1A1A22",
+                bgGradientEnd = "#0E0E18",
+                bgGradientRotation = 0,
+            },
+            admin = {
+                bg = "#220E0E",
+                avatarBg = "#2A1212",
+                avatarText = "#FF6464",
+                divider = "#FF6464",
+                border = "#DC5050",
+                nameText = "#FF8C8C",
+                roleText = "#C83C3C",
+                bgGradient = false,
+                bgGradientType = "linear",
+                bgGradientColors = { "#220E0E", "#150808" },
+                bgGradientAngle = 0,
+                bgGradientStart = "#220E0E",
+                bgGradientEnd = "#150808",
+                bgGradientRotation = 0,
+            },
+            owner = {
+                bg = "#160E1E",
+                avatarBg = "#1B1226",
+                avatarText = "#B87CFF",
+                divider = "#B87CFF",
+                border = "#AA64FF",
+                nameText = "#DDB8FF",
+                roleText = "#8850CC",
+                bgGradient = false,
+                bgGradientType = "linear",
+                bgGradientColors = { "#160E1E", "#0D0814" },
+                bgGradientAngle = 0,
+                bgGradientStart = "#160E1E",
+                bgGradientEnd = "#0D0814",
+                bgGradientRotation = 0,
+            },
+            developer = {
+                bg = "#0C1428",
+                avatarBg = "#101A34",
+                avatarText = "#64B4FF",
+                divider = "#64B4FF",
+                border = "#50A0F0",
+                nameText = "#8CD2FF",
+                roleText = "#3C82DC",
+                bgGradient = false,
+                bgGradientType = "linear",
+                bgGradientColors = { "#0C1428", "#060A18" },
+                bgGradientAngle = 0,
+                bgGradientStart = "#0C1428",
+                bgGradientEnd = "#060A18",
+                bgGradientRotation = 0,
+            },
+            advertising = {
+                bg = "#1C0E24",
+                avatarBg = "#24122E",
+                avatarText = "#C878FF",
+                divider = "#C878FF",
+                border = "#B464F0",
+                nameText = "#E6AAFF",
+                roleText = "#A050D2",
+                bgGradient = false,
+                bgGradientType = "linear",
+                bgGradientColors = { "#1C0E24", "#100818" },
+                bgGradientAngle = 0,
+                bgGradientStart = "#1C0E24",
+                bgGradientEnd = "#100818",
+                bgGradientRotation = 0,
+            },
+            moderator = {
+                bg = "#221C0A",
+                avatarBg = "#2A220C",
+                avatarText = "#FFC83C",
+                divider = "#FFC83C",
+                border = "#F0B428",
+                nameText = "#FFDC64",
+                roleText = "#DCA01E",
+                bgGradient = false,
+                bgGradientType = "linear",
+                bgGradientColors = { "#221C0A", "#141006" },
+                bgGradientAngle = 0,
+                bgGradientStart = "#221C0A",
+                bgGradientEnd = "#141006",
+                bgGradientRotation = 0,
+            },
+            staff = {
+                bg = "#0C2218",
+                avatarBg = "#10291E",
+                avatarText = "#64FFB4",
+                divider = "#64FFB4",
+                border = "#50F0A0",
+                nameText = "#8CFFCB",
+                roleText = "#3CDC8C",
+                bgGradient = false,
+                bgGradientType = "linear",
+                bgGradientColors = { "#0C2218", "#06140E" },
+                bgGradientAngle = 0,
+                bgGradientStart = "#0C2218",
+                bgGradientEnd = "#06140E",
+                bgGradientRotation = 0,
+            },
+        },
+        layout = {
+            billboardWidth = 240,
+            billboardHeight = 44,
+            studsOffsetY = 3.4,
+            avatarWidth = 44,
+            cornerRadius = 8,
+            innerCornerRadius = 5,
+            borderThickness = 1,
+            dividerWidth = 1,
+            dividerHeightPct = 0.6,
+            dividerTransparency = 0.75,
+            nameTextSize = 13,
+            nameFont = "GothamBold",
+            roleTextSize = 9,
+            roleFont = "GothamBold",
+            initialsTextSize = 11,
+            avatarTextGap = 10,
+            textPaddingRight = 4,
+            nameLabelHeight = 20,
+            nameLabelY = 4,
+            roleLabelHeight = 12,
+            roleLabelY = 26,
+            roleTextTransform = "upper",
+            avatarImagePadding = 3,
+            distanceScaleEnabled = true,
+            distanceScaleNear = 10,
+            distanceScaleFar = 60,
+            distanceScaleMin = 0.35,
+        },
+        animations = {
+            fadeInDuration = 0.3,
+            fadeInEasing = "Quad",
+            cardTransparency = 0,
+            borderTransparency = 0.3,
+        },
+        particles = {
+            enabled = true,
+            count = 4,
+            minSize = 2,
+            maxSize = 4,
+            transparency = 0.5,
+            moveDurationMin = 3,
+            moveDurationMax = 5,
+            colors = { "#B87CFF", "#A064F0", "#C896FF", "#8C50DC", "#DDB8FF" },
+        },
+        roleKeywords = {
+            owner = { "owner", "vip" },
+            developer = { "developer", "entwickler" },
+            moderator = { "moderator", "mod" },
+            admin = { "admin", "administrator" },
+            staff = { "staff" },
+            advertising = { "advertising", "werbung" },
+        },
+        roleUsers = {
+            owner = {},
+            admin = {},
+            developer = {},
+            moderator = {},
+            staff = {},
+            advertising = {},
+            user = {},
+        },
+        profilePictures = {
+            owner = { url = ownerProfilePicUrl, file = ownerProfilePicFileName },
+            user = { url = userProfilePicUrl, file = userProfilePicFileName },
+            admin = { url = "", file = "" },
+            developer = { url = "", file = "" },
+            moderator = { url = "", file = "" },
+            staff = {
+                url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/main/ROLE-ICONS/TL-STAFF.png",
+                file = "assets/ROLE-ICONS/TL-STAFF.png",
+            },
+            advertising = { url = "", file = "" },
+        },
+        customAvatars = {},
+        tagImages = {
+            staff = {
+                url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/main/ROLE-ICONS/TL-STAFF.png",
+                file = "assets/ROLE-ICONS/TL-STAFF.png",
+            },
+        },
+        roleLabels = {},
+        displayNames = {},
+        roleDisplayNames = {},
+        userColorOverrides = {},
+        userGradientOverrides = {},
+        gradients = {
+            cardGradient = {
+                enabled = false,
+                type = "Linear",
+                colors = { "#B87CFF", "#1A1A22" },
+                transparency = { 0, 0 },
+                rotation = 90,
+                offset = { 0, 0 },
+            },
+            avatarGradient = {
+                enabled = false,
+                type = "Linear",
+                colors = { "#B87CFF", "#160E1E" },
+                transparency = { 0, 0 },
+                rotation = 180,
+                offset = { 0, 0 },
+            },
+            nameGradient = {
+                enabled = false,
+                type = "Linear",
+                colors = { "#FFFFFF", "#B87CFF" },
+                transparency = { 0, 0 },
+                rotation = 0,
+                offset = { 0, 0 },
+            },
+            roleGradient = {
+                enabled = false,
+                type = "Linear",
+                colors = { "#B87CFF", "#8850CC" },
+                transparency = { 0, 0 },
+                rotation = 0,
+                offset = { 0, 0 },
+            },
+            borderGradient = {
+                enabled = false,
+                type = "Linear",
+                colors = { "#B87CFF", "#AA64FF" },
+                transparency = { 0, 0 },
+                rotation = 0,
+                offset = { 0, 0 },
+            },
+        },
+    }
+
+    local _NT_CONFIG = {}
+
+    local function _NT_deepCopy(orig)
+        if type(orig) ~= "table" then
+            return orig
+        end
+        local copy = {}
+        for k, v in pairs(orig) do
+            copy[k] = _NT_deepCopy(v)
+        end
+        return copy
+    end
+
+    _NT_CONFIG = _NT_deepCopy(_NT_DEFAULTS)
+
+    local _NT_onConfigLoaded = nil
+    local function _NT_loadConfig()
+        for k, v in pairs(_NT_DEFAULTS) do
+            if _NT_CONFIG[k] == nil then
+                _NT_CONFIG[k] = _NT_deepCopy(v)
+            end
+        end
+        task.spawn(function()
+            pcall(function()
+                local cUrl = ctx.configUrl
+                    or "https://raw.githubusercontent.com/TLMenu/TLMenu.github.io/refs/heads/main/NametagConfig.json"
+                local res = _safeHttpGet(cUrl)
+                if res and #res > 5 then
+                    local ok, json = pcall(function()
+                        return _SvcHttp:JSONDecode(res)
+                    end)
+                    if ok and type(json) == "table" then
+                        if json.enabled ~= nil then
+                            _NT_CONFIG.enabled = json.enabled
+                        end
+                        if json.targetUser ~= nil then
+                            _NT_CONFIG.targetUser = json.targetUser
+                        end
+                        if type(json.showAllPlayers) == "boolean" then
+                            _NT_CONFIG.showAllPlayers = json.showAllPlayers
+                        end
+                        if type(json.alwaysVisibleRoles) == "table" then
+                            _NT_CONFIG.alwaysVisibleRoles = json.alwaysVisibleRoles
+                        end
+                        if json.roleUsers and type(json.roleUsers) == "table" then
+                            _NT_CONFIG.roleUsers = _NT_CONFIG.roleUsers or {}
+                            for role, users in pairs(json.roleUsers) do
+                                _NT_CONFIG.roleUsers[role] = users
+                                if
+                                    type(users) == "table"
+                                    and (role == "owner" or role == "admin" or role == "developer")
+                                then
+                                    for _, u in ipairs(users) do
+                                        AdminNames[tostring(u)] = true
+                                    end
+                                end
+                            end
+                        end
+                        if json.roleLabels and type(json.roleLabels) == "table" then
+                            _NT_CONFIG.roleLabels = json.roleLabels
+                        end
+                        if json.displayNames and type(json.displayNames) == "table" then
+                            _NT_CONFIG.displayNames = json.displayNames
+                        end
+                        if json.roleDisplayNames and type(json.roleDisplayNames) == "table" then
+                            _NT_CONFIG.roleDisplayNames = json.roleDisplayNames
+                        end
+                        if json.customAvatars and type(json.customAvatars) == "table" then
+                            _NT_CONFIG.customAvatars = json.customAvatars
+                        end
+                        if json.userColorOverrides and type(json.userColorOverrides) == "table" then
+                            _NT_CONFIG.userColorOverrides = json.userColorOverrides
+                        end
+                        if json.userGradientOverrides and type(json.userGradientOverrides) == "table" then
+                            _NT_CONFIG.userGradientOverrides = json.userGradientOverrides
+                        end
+                        if json.profilePictures and type(json.profilePictures) == "table" then
+                            _NT_CONFIG.profilePictures = _NT_CONFIG.profilePictures or {}
+                            for k, v in pairs(json.profilePictures) do
+                                _NT_CONFIG.profilePictures[k] = v
+                            end
+                        end
+                        if json.tagImages and type(json.tagImages) == "table" then
+                            _NT_CONFIG.tagImages = _NT_CONFIG.tagImages or {}
+                            for k, v in pairs(json.tagImages) do
+                                _NT_CONFIG.tagImages[k] = v
+                            end
+                        end
+                        if json.roleKeywords and type(json.roleKeywords) == "table" then
+                            _NT_CONFIG.roleKeywords = _NT_CONFIG.roleKeywords or {}
+                            for k, v in pairs(json.roleKeywords) do
+                                _NT_CONFIG.roleKeywords[k] = v
+                            end
+                        end
+                        if json.animations and type(json.animations) == "table" then
+                            _NT_CONFIG.animations = _NT_CONFIG.animations or {}
+                            for k, v in pairs(json.animations) do
+                                _NT_CONFIG.animations[k] = v
+                            end
+                        end
+                        if json.particles and type(json.particles) == "table" then
+                            _NT_CONFIG.particles = _NT_CONFIG.particles or {}
+                            for k, v in pairs(json.particles) do
+                                _NT_CONFIG.particles[k] = v
+                            end
+                        end
+                        if json.gradients and type(json.gradients) == "table" then
+                            _NT_CONFIG.gradients = _NT_CONFIG.gradients or {}
+                            for k, v in pairs(json.gradients) do
+                                _NT_CONFIG.gradients[k] = v
+                            end
+                        end
+                        if json.themes and type(json.themes) == "table" then
+                            _NT_CONFIG.themes = _NT_CONFIG.themes or {}
+                            for k, v in pairs(json.themes) do
+                                if type(v) == "table" then
+                                    local merged = _NT_deepCopy(_NT_CONFIG.themes[k] or _NT_DEFAULTS.themes.user)
+                                    for tk, tv in pairs(v) do
+                                        merged[tk] = tv
+                                    end
+                                    _NT_CONFIG.themes[k] = merged
+                                end
+                            end
+                        end
+                        if json.layout and type(json.layout) == "table" then
+                            _NT_CONFIG.layout = _NT_CONFIG.layout or {}
+                            for k, v in pairs(json.layout) do
+                                _NT_CONFIG.layout[k] = v
+                            end
+                        end
+                    end
+                end
+            end)
+            pcall(function()
+                local rUrl = ctx.rolesUrl
+                    or "https://raw.githubusercontent.com/TLMenu/TLMenu.github.io/refs/heads/main/NametagRoles.json"
+                local res = _safeHttpGet(rUrl)
+                if res and #res > 5 then
+                    local ok, json = pcall(function()
+                        return _SvcHttp:JSONDecode(res)
+                    end)
+                    if ok and type(json) == "table" then
+                        if json.roleUsers and type(json.roleUsers) == "table" then
+                            _NT_CONFIG.roleUsers = _NT_CONFIG.roleUsers or {}
+                            for role, users in pairs(json.roleUsers) do
+                                _NT_CONFIG.roleUsers[role] = users
+                                if
+                                    type(users) == "table"
+                                    and (role == "owner" or role == "admin" or role == "developer")
+                                then
+                                    for _, u in ipairs(users) do
+                                        AdminNames[tostring(u)] = true
+                                    end
+                                end
+                            end
+                        end
+                        if json.nameOverrides and type(json.nameOverrides) == "table" then
+                            for k, v in pairs(json.nameOverrides) do
+                                NameOverrides[k] = v
+                            end
+                        end
+                    end
+                end
+            end)
+
+            if _NT_onConfigLoaded then
+                pcall(_NT_onConfigLoaded)
+            end
+        end)
+    end
+    _NT_loadConfig()
+
+    local function _NT_hslToColor3(h, sat, lig)
+        h = h % 1
+        sat = math.clamp(sat, 0, 1)
+        lig = math.clamp(lig, 0, 1)
+        if sat == 0 then
+            return Color3.new(lig, lig, lig)
+        end
+        local q = lig < 0.5 and lig * (1 + sat) or lig + sat - lig * sat
+        local p = 2 * lig - q
+        local function hue(t)
+            if t < 0 then
+                t = t + 1
+            elseif t > 1 then
+                t = t - 1
+            end
+            if t < 1 / 6 then
+                return p + (q - p) * 6 * t
+            end
+            if t < 1 / 2 then
+                return q
+            end
+            if t < 2 / 3 then
+                return p + (q - p) * (2 / 3 - t) * 6
+            end
+            return p
+        end
+        return Color3.new(hue(h + 1 / 3), hue(h), hue(h - 1 / 3))
+    end
+
+    local function _NT_hexToColor3(hex)
+        if typeof(hex) == "Color3" then
+            return hex
+        end
+        if type(hex) == "table" then
+            local r = hex.r or hex[1] or 255
+            local g = hex.g or hex[2] or 255
+            local b = hex.b or hex[3] or 255
+            if r <= 1 and g <= 1 and b <= 1 and (hex.r or hex[1]) then
+                return Color3.new(r, g, b)
+            end
+            return Color3.fromRGB(math.clamp(r, 0, 255), math.clamp(g, 0, 255), math.clamp(b, 0, 255))
+        end
+        if type(hex) ~= "string" then
+            return Color3.new(1, 1, 1)
+        end
+
+        local str = hex:gsub("%s+", "")
+
+        local r, g, b = str:match("^rgba?%((%d+),(%d+),(%d+)")
+        if r and g and b then
+            return Color3.fromRGB(tonumber(r) or 255, tonumber(g) or 255, tonumber(b) or 255)
+        end
+
+        local h, s, l = str:match("^hsla?%((%d+),(%d+)%%?,(%d+)%%?")
+        if h and s and l then
+            local fh = (tonumber(h) or 0) / 360
+            local fs = (tonumber(s) or 0) / 100
+            local fl = (tonumber(l) or 0) / 100
+            return _NT_hslToColor3(fh, fs, fl)
+        end
+
+        local clean = str:gsub("^#", "")
+
+        if #clean == 3 then
+            local r1, g1, b1 = clean:sub(1, 1), clean:sub(2, 2), clean:sub(3, 3)
+            clean = r1 .. r1 .. g1 .. g1 .. b1 .. b1
+        elseif #clean == 4 then
+            local r1, g1, b1 = clean:sub(1, 1), clean:sub(2, 2), clean:sub(3, 3)
+            clean = r1 .. r1 .. g1 .. g1 .. b1 .. b1
+        elseif #clean == 8 then
+            clean = clean:sub(1, 6)
+        end
+
+        if #clean == 6 then
+            local cr = tonumber(clean:sub(1, 2), 16) or 255
+            local cg = tonumber(clean:sub(3, 4), 16) or 255
+            local cb = tonumber(clean:sub(5, 6), 16) or 255
+            return Color3.fromRGB(cr, cg, cb)
+        end
+
+        return Color3.new(1, 1, 1)
+    end
+
+    local function _NT_parseColor(val)
+        return _NT_hexToColor3(val)
+    end
+
+    local function _NT_buildColorSeq(rawColors, rawTransparencies)
+        local csPairs = {}
+        local nsPairs = {}
+
+        if type(rawColors) ~= "table" or #rawColors == 0 then
+            return ColorSequence.new(Color3.new(1, 1, 1)), NumberSequence.new(0)
+        end
+
+        local rawKeypoints = {}
+        for i, item in ipairs(rawColors) do
+            local cVal, pos
+            if type(item) == "table" and item.color then
+                cVal = _NT_parseColor(item.color)
+                pos = tonumber(item.pos or item.offset or item.position) or ((i - 1) / math.max(1, #rawColors - 1))
+            else
+                cVal = _NT_parseColor(item)
+                pos = (i - 1) / math.max(1, #rawColors - 1)
+            end
+            table.insert(rawKeypoints, { t = math.clamp(pos, 0, 1), color = cVal })
+        end
+
+        table.sort(rawKeypoints, function(a, b)
+            return a.t < b.t
+        end)
+
+        if #rawKeypoints == 1 then
+            local c = rawKeypoints[1].color
+            csPairs = { ColorSequenceKeypoint.new(0, c), ColorSequenceKeypoint.new(1, c) }
+        else
+            local lastT = -0.0001
+            for i, kp in ipairs(rawKeypoints) do
+                local t = kp.t
+                if i == 1 then
+                    t = 0
+                end
+                if i == #rawKeypoints then
+                    t = 1
+                end
+                if t <= lastT then
+                    t = math.min(1, lastT + 0.001)
+                end
+                lastT = t
+                table.insert(csPairs, ColorSequenceKeypoint.new(t, kp.color))
+            end
+        end
+
+        if type(rawTransparencies) == "table" and #rawTransparencies > 0 then
+            if #rawTransparencies == 1 then
+                local tr = tonumber(rawTransparencies[1]) or 0
+                nsPairs = { NumberSequenceKeypoint.new(0, tr), NumberSequenceKeypoint.new(1, tr) }
+            else
+                local lastT = -0.0001
+                for i, trVal in ipairs(rawTransparencies) do
+                    local t = (i - 1) / math.max(1, #rawTransparencies - 1)
+                    local tr = math.clamp(tonumber(trVal) or 0, 0, 1)
+                    if i == 1 then
+                        t = 0
+                    end
+                    if i == #rawTransparencies then
+                        t = 1
+                    end
+                    if t <= lastT then
+                        t = math.min(1, lastT + 0.001)
+                    end
+                    lastT = t
+                    table.insert(nsPairs, NumberSequenceKeypoint.new(t, tr))
+                end
+            end
+        else
+            nsPairs = { NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0) }
+        end
+
+        local finalCS = pcall(function()
+            return ColorSequence.new(csPairs)
+        end) and ColorSequence.new(csPairs) or ColorSequence.new(Color3.new(1, 1, 1))
+        local finalNS = pcall(function()
+            return NumberSequence.new(nsPairs)
+        end) and NumberSequence.new(nsPairs) or NumberSequence.new(0)
+
+        return finalCS, finalNS
+    end
+
+    local function _NT_applyGradient(target, gradCfg)
+        if not target or not gradCfg or not gradCfg.enabled then
+            return nil, {}
+        end
+
+        local _GRAD_TYPE_MAP = {
+            linear = "Linear",
+            radial = "Radial",
+            conic = "Conic",
+            angular = "Angular",
+            mesh = "Mesh",
+            color = "Color",
+            blend = "Blend",
+            colorblend = "Blend",
+            duotone = "Duotone",
+            multicolor = "Multicolor",
+            smooth = "Smooth",
+            soft = "Soft",
+            glass = "Glass",
+            neon = "Neon",
+            metallic = "Metallic",
+            iridescent = "Iridescent",
+            holographic = "Holographic",
+            aurora = "Aurora",
+            sunset = "Sunset",
+            spectrum = "Spectrum",
+            liquid = "Liquid",
+            dynamic = "Dynamic",
+            fluid = "Fluid",
+            chromatic = "Chromatic",
+            ombre = "Ombre",
+            fade = "Fade",
+            transition = "ColorTransition",
+            colortransition = "ColorTransition",
+            overlay = "Overlay",
+            gradmesh = "Mesh",
+            flow = "Flow",
+            wave = "Wave",
+        }
+        local rawType = tostring(gradCfg.type or "Linear"):lower()
+        local gType = _GRAD_TYPE_MAP[rawType] or "Linear"
+        local colors = gradCfg.colors or { "#FFFFFF", "#000000" }
+        if type(colors) ~= "table" or #colors == 0 then
+            colors = { "#FFFFFF", "#000000" }
+        elseif #colors == 1 then
+            colors = { colors[1], colors[1] }
+        end
+        local trans = gradCfg.transparency or { 0, 0 }
+        if type(trans) == "number" then
+            trans = { trans, trans }
+        elseif type(trans) ~= "table" then
+            trans = { 0, 0 }
+        end
+        local rot = tonumber(gradCfg.rotation) or 0
+        local cs, ns = _NT_buildColorSeq(colors, trans)
+        local conns = {}
+
+        if gType == "Linear" then
+            local ug = Instance.new("UIGradient", target)
+            ug.Color = cs
+            ug.Transparency = ns
+            ug.Rotation = rot
+            ug.Offset =
+                Vector2.new(gradCfg.offset and gradCfg.offset[1] or 0, gradCfg.offset and gradCfg.offset[2] or 0)
+            return ug, conns
+        elseif gType == "Radial" then
+            local ug = Instance.new("UIGradient", target)
+            ug.Color = cs
+            ug.Transparency = ns
+            ug.Rotation = rot
+            return ug, conns
+        elseif gType == "Conic" or gType == "Angular" then
+            local ug = Instance.new("UIGradient", target)
+            ug.Color = cs
+            ug.Transparency = ns
+            ug.Rotation = rot
+            if not _NT_canAnimateGradient() then
+                return ug, conns
+            end
+            local alive = { alive = true, parent = target }
+            _NT_GRADIENT_ANIM_ALIVE[#_NT_GRADIENT_ANIM_ALIVE + 1] = alive
+            local speed = gradCfg.speed or 0.5
+            task.spawn(function()
+                local t = 0
+                while alive.alive and target and target.Parent do
+                    t = t + task.wait(_NT_GRADIENT_ANIM_INTERVAL)
+                    pcall(function()
+                        ug.Rotation = (rot + t * speed * 360) % 360
+                    end)
+                end
+            end)
+            return ug, conns
+        elseif gType == "Mesh" then
+            local layers = gradCfg.layers
+            if type(layers) ~= "table" or #layers == 0 then
+                layers = {
+                    { colors = colors, transparency = trans, rotation = rot },
+                    {
+                        colors = { colors[#colors] or "#000000", colors[1] or "#FFFFFF" },
+                        transparency = { 0.5, 0.5 },
+                        rotation = (rot + 90) % 360,
+                    },
+                }
+            end
+            for _, layer in ipairs(layers) do
+                local lcs, lns = _NT_buildColorSeq(layer.colors, layer.transparency)
+                local lug = Instance.new("UIGradient", target)
+                lug.Color = lcs
+                lug.Transparency = lns
+                lug.Rotation = layer.rotation or rot
+                lug.Offset = Vector2.new(0.5, 0.5)
+            end
+            return nil, conns
+        elseif gType == "Color" or gType == "ColorTransition" then
+            local ug = Instance.new("UIGradient", target)
+            ug.Color = cs
+            ug.Transparency = ns
+            ug.Rotation = rot
+            return ug, conns
+        elseif gType == "Blend" then
+            local ug = Instance.new("UIGradient", target)
+            local blendT = (type(gradCfg.transparency) == "table" and gradCfg.transparency) or { 0, 0.5 }
+            local blendNS = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, math.clamp(blendT[1] or 0, 0, 0.9)),
+                NumberSequenceKeypoint.new(0.5, math.clamp(blendT[2] or 0.3, 0, 0.9)),
+                NumberSequenceKeypoint.new(1, math.clamp(blendT[1] or 0, 0, 0.9)),
+            })
+            ug.Color = cs
+            ug.Transparency = blendNS
+            ug.Rotation = rot
+            return ug, conns
+        elseif gType == "Duotone" then
+            local c1 = _NT_parseColor(colors[1] or "#FFFFFF")
+            local c2 = _NT_parseColor(colors[2] or "#000000")
+            target.BackgroundColor3 = c1
+            local ug = Instance.new("UIGradient", target)
+            ug.Color = ColorSequence.new(c2, c1)
+            ug.Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0),
+                NumberSequenceKeypoint.new(0.5, 0.3),
+                NumberSequenceKeypoint.new(1, 0),
+            })
+            ug.Rotation = rot
+            return ug, conns
+        elseif gType == "Multicolor" or gType == "Spectrum" then
+            local ug = Instance.new("UIGradient", target)
+            ug.Color = cs
+            ug.Transparency = ns
+            ug.Rotation = rot
+            if not _NT_canAnimateGradient() then
+                return ug, conns
+            end
+            local alive = { alive = true, parent = target }
+            _NT_GRADIENT_ANIM_ALIVE[#_NT_GRADIENT_ANIM_ALIVE + 1] = alive
+            local speed = gradCfg.speed or 0.3
+            task.spawn(function()
+                local t = 0
+                while alive.alive and target and target.Parent do
+                    t = t + task.wait(_NT_GRADIENT_ANIM_INTERVAL)
+                    pcall(function()
+                        ug.Rotation = (rot + t * speed * 120) % 360
+                    end)
+                end
+            end)
+            return ug, conns
+        elseif gType == "Smooth" then
+            local smoothT = trans
+            if #smoothT == 2 then
+                smoothT = { smoothT[1], (smoothT[1] + smoothT[2]) / 2, smoothT[2] }
+            end
+            local smoothCS = {}
+            for i = 1, #colors do
+                local t = (i - 1) / math.max(1, #colors - 1)
+                smoothCS[#smoothCS + 1] = ColorSequenceKeypoint.new(t, _NT_parseColor(colors[i]))
+            end
+            if #smoothCS == 2 then
+                local mid = _NT_parseColor(colors[1]):Lerp(_NT_parseColor(colors[2]), 0.5)
+                smoothCS = {
+                    ColorSequenceKeypoint.new(0, _NT_parseColor(colors[1])),
+                    ColorSequenceKeypoint.new(0.5, mid),
+                    ColorSequenceKeypoint.new(1, _NT_parseColor(colors[2])),
+                }
+            end
+            local ug = Instance.new("UIGradient", target)
+            ug.Color = ColorSequence.new(smoothCS)
+            ug.Transparency = ns
+            ug.Rotation = rot
+            return ug, conns
+        elseif gType == "Soft" then
+            local ug = Instance.new("UIGradient", target)
+            local softColors = {}
+            for i = 1, #colors do
+                local c = _NT_parseColor(colors[i]):Lerp(Color3.new(1, 1, 1), 0.2)
+                softColors[#softColors + 1] = ColorSequenceKeypoint.new((i - 1) / math.max(1, #colors - 1), c)
+            end
+            if #softColors == 2 then
+                local c1 = _NT_parseColor(colors[1]):Lerp(Color3.new(1, 1, 1), 0.2)
+                local c2 = _NT_parseColor(colors[2]):Lerp(Color3.new(1, 1, 1), 0.2)
+                local mid = c1:Lerp(c2, 0.5)
+                softColors = {
+                    ColorSequenceKeypoint.new(0, c1),
+                    ColorSequenceKeypoint.new(0.35, mid),
+                    ColorSequenceKeypoint.new(0.65, mid),
+                    ColorSequenceKeypoint.new(1, c2),
+                }
+            end
+            ug.Color = ColorSequence.new(softColors)
+            ug.Transparency = ns
+            ug.Rotation = rot
+            return ug, conns
+        elseif gType == "Glass" then
+            local ug = Instance.new("UIGradient", target)
+            local glassNS = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.3),
+                NumberSequenceKeypoint.new(0.3, 0),
+                NumberSequenceKeypoint.new(0.6, 0.15),
+                NumberSequenceKeypoint.new(1, 0.5),
+            })
+            ug.Color = cs
+            ug.Transparency = glassNS
+            ug.Rotation = rot + 45
+            return ug, conns
+        elseif gType == "Neon" then
+            local ug = Instance.new("UIGradient", target)
+            local neonCS = {}
+            for i = 1, #colors do
+                local c = _NT_parseColor(colors[i])
+                local brightC = c:Lerp(Color3.new(1, 1, 1), 0.5)
+                local softC = c:Lerp(Color3.new(1, 1, 1), 0.2)
+                local base = (i - 1) / #colors
+                neonCS[#neonCS + 1] = ColorSequenceKeypoint.new(math.clamp(base, 0, 1), softC)
+                neonCS[#neonCS + 1] = ColorSequenceKeypoint.new(math.clamp(base + 0.2 / #colors, 0, 1), brightC)
+                neonCS[#neonCS + 1] = ColorSequenceKeypoint.new(math.clamp(base + 0.4 / #colors, 0, 1), softC)
+            end
+            neonCS[#neonCS + 1] = ColorSequenceKeypoint.new(1, neonCS[1].Value)
+            ug.Color = ColorSequence.new(neonCS)
+            ug.Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0),
+                NumberSequenceKeypoint.new(0.25, 0.1),
+                NumberSequenceKeypoint.new(0.5, 0),
+                NumberSequenceKeypoint.new(0.75, 0.1),
+                NumberSequenceKeypoint.new(1, 0),
+            })
+            ug.Rotation = rot
+            if not _NT_canAnimateGradient() then
+                return ug, conns
+            end
+            local alive = { alive = true, parent = target }
+            _NT_GRADIENT_ANIM_ALIVE[#_NT_GRADIENT_ANIM_ALIVE + 1] = alive
+            local speed = gradCfg.speed or 1
+            task.spawn(function()
+                local t = 0
+                while alive.alive and target and target.Parent do
+                    t = t + task.wait(_NT_GRADIENT_ANIM_INTERVAL)
+                    pcall(function()
+                        ug.Rotation = (rot + t * speed * 60) % 360
+                    end)
+                end
+            end)
+            return ug, conns
+        elseif gType == "Metallic" then
+            local ug = Instance.new("UIGradient", target)
+            local metCS = {}
+            for i = 1, #colors do
+                local c = _NT_parseColor(colors[i])
+                local metDark = c:Lerp(Color3.new(0, 0, 0), 0.45)
+                local metMid = c:Lerp(Color3.new(1, 1, 1), 0.15)
+                local metLight = c:Lerp(Color3.new(1, 1, 1), 0.5)
+                local base = (i - 1) / #colors
+                metCS[#metCS + 1] = ColorSequenceKeypoint.new(math.clamp(base, 0, 1), metDark)
+                metCS[#metCS + 1] = ColorSequenceKeypoint.new(math.clamp(base + 0.15 / #colors, 0, 1), metMid)
+                metCS[#metCS + 1] = ColorSequenceKeypoint.new(math.clamp(base + 0.35 / #colors, 0, 1), metLight)
+                metCS[#metCS + 1] = ColorSequenceKeypoint.new(math.clamp(base + 0.5 / #colors, 0, 1), metMid)
+            end
+            metCS[#metCS + 1] = ColorSequenceKeypoint.new(1, metCS[1].Value)
+            ug.Color = ColorSequence.new(metCS)
+            ug.Transparency = ns
+            ug.Rotation = rot
+            return ug, conns
+        elseif gType == "Iridescent" or gType == "Holographic" then
+            local ug = Instance.new("UIGradient", target)
+            local iriCS = {}
+            for i = 1, #colors do
+                local c = _NT_parseColor(colors[i])
+                local brightC = c:Lerp(Color3.new(1, 1, 1), 0.3)
+                local t = (i - 1) / math.max(1, #colors - 1)
+                iriCS[#iriCS + 1] = ColorSequenceKeypoint.new(t, brightC)
+            end
+            if #iriCS < 4 then
+                local c1 = _NT_parseColor(colors[1])
+                local c2 = _NT_parseColor(colors[2] or colors[1])
+                local c3 = _NT_parseColor(colors[3] or colors[2] or colors[1])
+                local mid1 = c1:Lerp(c2, 0.33):Lerp(Color3.new(1, 1, 1), 0.2)
+                local mid2 = c2:Lerp(c3, 0.66):Lerp(Color3.new(1, 1, 1), 0.2)
+                iriCS = {
+                    ColorSequenceKeypoint.new(0, c1:Lerp(Color3.new(1, 1, 1), 0.3)),
+                    ColorSequenceKeypoint.new(0.33, mid1),
+                    ColorSequenceKeypoint.new(0.66, mid2),
+                    ColorSequenceKeypoint.new(1, c3:Lerp(Color3.new(1, 1, 1), 0.3)),
+                }
+            end
+            ug.Color = ColorSequence.new(iriCS)
+            ug.Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0),
+                NumberSequenceKeypoint.new(0.25, 0.05),
+                NumberSequenceKeypoint.new(0.5, 0),
+                NumberSequenceKeypoint.new(0.75, 0.05),
+                NumberSequenceKeypoint.new(1, 0),
+            })
+            ug.Rotation = rot
+            if not _NT_canAnimateGradient() then
+                return ug, conns
+            end
+            local alive = { alive = true, parent = target }
+            _NT_GRADIENT_ANIM_ALIVE[#_NT_GRADIENT_ANIM_ALIVE + 1] = alive
+            local speed = gradCfg.speed or 0.4
+            task.spawn(function()
+                local t = 0
+                while alive.alive and target and target.Parent do
+                    t = t + task.wait(_NT_GRADIENT_ANIM_INTERVAL)
+                    pcall(function()
+                        ug.Rotation = (rot + t * speed * 90) % 360
+                    end)
+                end
+            end)
+            return ug, conns
+        elseif gType == "Aurora" then
+            local ug = Instance.new("UIGradient", target)
+            local auCS = {}
+            for i = 1, #colors do
+                local c = _NT_parseColor(colors[i])
+                local t = (i - 1) / math.max(1, #colors - 1)
+                auCS[#auCS + 1] = ColorSequenceKeypoint.new(t, c)
+            end
+            if #auCS < 3 then
+                local c1 = _NT_parseColor(colors[1])
+                local c2 = _NT_parseColor(colors[2] or colors[1])
+                local mid = c1:Lerp(c2, 0.5)
+                auCS = {
+                    ColorSequenceKeypoint.new(0, c1),
+                    ColorSequenceKeypoint.new(0.5, mid),
+                    ColorSequenceKeypoint.new(1, c2),
+                }
+            end
+            ug.Color = ColorSequence.new(auCS)
+            ug.Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.1),
+                NumberSequenceKeypoint.new(0.3, 0),
+                NumberSequenceKeypoint.new(0.7, 0),
+                NumberSequenceKeypoint.new(1, 0.1),
+            })
+            ug.Rotation = rot
+            if not _NT_canAnimateGradient() then
+                return ug, conns
+            end
+            local alive = { alive = true, parent = target }
+            _NT_GRADIENT_ANIM_ALIVE[#_NT_GRADIENT_ANIM_ALIVE + 1] = alive
+            local speed = gradCfg.speed or 0.3
+            task.spawn(function()
+                local t = 0
+                while alive.alive and target and target.Parent do
+                    t = t + task.wait(_NT_GRADIENT_ANIM_INTERVAL)
+                    pcall(function()
+                        ug.Rotation = (rot + t * speed * 50) % 360
+                    end)
+                end
+            end)
+            return ug, conns
+        elseif gType == "Sunset" then
+            local ug = Instance.new("UIGradient", target)
+            local ssCS = {}
+            for i = 1, #colors do
+                local c = _NT_parseColor(colors[i])
+                local t = (i - 1) / math.max(1, #colors - 1)
+                ssCS[#ssCS + 1] = ColorSequenceKeypoint.new(t, c)
+            end
+            ug.Color = ColorSequence.new(ssCS)
+            ug.Transparency = ns
+            ug.Rotation = rot
+            return ug, conns
+        elseif gType == "Liquid" or gType == "Fluid" then
+            local ug = Instance.new("UIGradient", target)
+            ug.Color = cs
+            ug.Transparency = ns
+            ug.Rotation = rot
+            if not _NT_canAnimateGradient() then
+                return ug, conns
+            end
+            local alive = { alive = true, parent = target }
+            _NT_GRADIENT_ANIM_ALIVE[#_NT_GRADIENT_ANIM_ALIVE + 1] = alive
+            local speed = gradCfg.speed or 0.5
+            task.spawn(function()
+                local t = 0
+                while alive.alive and target and target.Parent do
+                    t = t + task.wait(_NT_GRADIENT_ANIM_INTERVAL)
+                    pcall(function()
+                        ug.Rotation = (rot + math.sin(t * speed) * 45) % 360
+                        ug.Offset = Vector2.new(math.sin(t * speed * 0.7) * 0.15, math.cos(t * speed * 0.5) * 0.15)
+                    end)
+                end
+            end)
+            return ug, conns
+        elseif gType == "Dynamic" or gType == "Flow" then
+            local ug = Instance.new("UIGradient", target)
+            ug.Color = cs
+            ug.Transparency = ns
+            ug.Rotation = rot
+            if not _NT_canAnimateGradient() then
+                return ug, conns
+            end
+            local alive = { alive = true, parent = target }
+            _NT_GRADIENT_ANIM_ALIVE[#_NT_GRADIENT_ANIM_ALIVE + 1] = alive
+            local speed = gradCfg.speed or 1
+            task.spawn(function()
+                local t = 0
+                while alive.alive and target and target.Parent do
+                    t = t + task.wait(_NT_GRADIENT_ANIM_INTERVAL)
+                    pcall(function()
+                        ug.Rotation = (rot + t * speed * 30) % 360
+                        ug.Offset = Vector2.new(math.sin(t * speed * 0.4) * 0.2, 0)
+                    end)
+                end
+            end)
+            return ug, conns
+        elseif gType == "Chromatic" then
+            local ug = Instance.new("UIGradient", target)
+            local chCS = {}
+            for i = 1, #colors do
+                local c = _NT_parseColor(colors[i])
+                chCS[#chCS + 1] = ColorSequenceKeypoint.new((i - 1) / math.max(1, #colors - 1), c)
+            end
+            if #chCS < 3 then
+                local extra = _NT_parseColor(colors[1] or "#FFFFFF"):Lerp(_NT_parseColor(colors[2] or "#000000"), 0.5)
+                table.insert(chCS, 2, ColorSequenceKeypoint.new(0.5, extra))
+            end
+            ug.Color = ColorSequence.new(chCS)
+            ug.Transparency = ns
+            ug.Rotation = rot
+            if not _NT_canAnimateGradient() then
+                return ug, conns
+            end
+            local alive = { alive = true, parent = target }
+            _NT_GRADIENT_ANIM_ALIVE[#_NT_GRADIENT_ANIM_ALIVE + 1] = alive
+            local speed = gradCfg.speed or 0.6
+            task.spawn(function()
+                local t = 0
+                while alive.alive and target and target.Parent do
+                    t = t + task.wait(_NT_GRADIENT_ANIM_INTERVAL)
+                    pcall(function()
+                        local shift = (t * speed * 0.3) % 1
+                        ug.Offset = Vector2.new(shift - 0.5, 0)
+                    end)
+                end
+            end)
+            return ug, conns
+        elseif gType == "Ombre" or gType == "Fade" then
+            local ug = Instance.new("UIGradient", target)
+            local oC1 = _NT_parseColor(colors[1] or "#000000")
+            local oC2 = _NT_parseColor(colors[2] or "#FFFFFF")
+            ug.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, oC1),
+                ColorSequenceKeypoint.new(0.4, oC1),
+                ColorSequenceKeypoint.new(0.6, oC2),
+                ColorSequenceKeypoint.new(1, oC2),
+            })
+            ug.Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0),
+                NumberSequenceKeypoint.new(0.4, 0),
+                NumberSequenceKeypoint.new(0.6, 0.4),
+                NumberSequenceKeypoint.new(1, 0.8),
+            })
+            ug.Rotation = rot
+            return ug, conns
+        elseif gType == "Wave" then
+            local ug = Instance.new("UIGradient", target)
+            ug.Color = cs
+            local waveNS = {}
+            local freq = gradCfg.frequency or 4
+            local amp = gradCfg.amplitude or 0.3
+            for i = 0, 10 do
+                local t = i / 10
+                local baseT = tonumber(trans[1]) or 0
+                local v = baseT + (tonumber(amp) or 0.3) * math.abs(math.sin(t * (tonumber(freq) or 4) * math.pi))
+                waveNS[#waveNS + 1] = NumberSequenceKeypoint.new(t, math.clamp(v, 0, 1))
+            end
+            ug.Transparency = NumberSequence.new(waveNS)
+            ug.Rotation = rot
+            if not _NT_canAnimateGradient() then
+                return ug, conns
+            end
+            local alive = { alive = true, parent = target }
+            _NT_GRADIENT_ANIM_ALIVE[#_NT_GRADIENT_ANIM_ALIVE + 1] = alive
+            local speed = gradCfg.speed or 0.5
+            task.spawn(function()
+                local t = 0
+                while alive.alive and target and target.Parent do
+                    t = t + task.wait(_NT_GRADIENT_ANIM_INTERVAL)
+                    pcall(function()
+                        ug.Offset = Vector2.new(math.sin(t * speed) * 0.2, 0)
+                    end)
+                end
+            end)
+            return ug, conns
+        elseif gType == "Overlay" then
+            local ug = Instance.new("UIGradient", target)
+            ug.Color = cs
+            ug.Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.2),
+                NumberSequenceKeypoint.new(0.5, 0),
+                NumberSequenceKeypoint.new(1, 0.2),
+            })
+            ug.Rotation = rot + 45
+            return ug, conns
+        end
+
+        return nil, conns
+    end
+
+    local function _NT_resolveGradientSet(playerName, roleKey, theme)
+        local resolved = {}
+        local targets = { "cardGradient", "avatarGradient", "nameGradient", "roleGradient", "borderGradient" }
+
+        local userGrads = _NT_CONFIG.userGradientOverrides and _NT_CONFIG.userGradientOverrides[playerName]
+        local themeGrads = (theme and theme.gradients)
+            or (_NT_CONFIG.themes and _NT_CONFIG.themes[roleKey] and _NT_CONFIG.themes[roleKey].gradients)
+        local globalGrads = _NT_CONFIG.gradients or {}
+        local defaultGrads = _NT_DEFAULTS and _NT_DEFAULTS.gradients or {}
+
+        for _, targetKey in ipairs(targets) do
+            local g = (userGrads and userGrads[targetKey])
+                or (themeGrads and themeGrads[targetKey])
+                or (globalGrads and globalGrads[targetKey])
+                or (defaultGrads and defaultGrads[targetKey])
+            if g then
+                resolved[targetKey] = _NT_deepCopy(g)
+            end
+        end
+        return resolved
+    end
+
+    local function _NT_applyAllGradients(billboard, card, avatar, nameLabel, roleTxt, cardBorder, gradCfg)
+        if type(gradCfg) ~= "table" then
+            return
+        end
+        if gradCfg.cardGradient and gradCfg.cardGradient.enabled then
+            _NT_applyGradient(card, gradCfg.cardGradient)
+        end
+        if gradCfg.avatarGradient and gradCfg.avatarGradient.enabled then
+            _NT_applyGradient(avatar, gradCfg.avatarGradient)
+        end
+        if gradCfg.nameGradient and gradCfg.nameGradient.enabled then
+            _NT_applyGradient(nameLabel, gradCfg.nameGradient)
+        end
+        if gradCfg.roleGradient and gradCfg.roleGradient.enabled then
+            _NT_applyGradient(roleTxt, gradCfg.roleGradient)
+        end
+        if gradCfg.borderGradient and gradCfg.borderGradient.enabled and cardBorder then
+            _NT_applyGradient(cardBorder, gradCfg.borderGradient)
+        end
+    end
+
+    local function DoesPlayerQualifyForNametag(p)
+        if not _NT_CONFIG or not _NT_CONFIG.enabled then
+            return false
+        end
+        if not p then
+            return false
+        end
+        local lp = LocalPlayer or _SvcPlr.LocalPlayer
+        local pObj = nil
+        local pName = ""
+        local pUserId = ""
+        if typeof(p) == "Instance" and p:IsA("Player") then
+            pObj = p
+            pName = p.Name
+            pUserId = tostring(p.UserId)
+        elseif type(p) == "string" then
+            pName = p
+            pObj = _SvcPlr:FindFirstChild(p)
+            if pObj then
+                pUserId = tostring(pObj.UserId)
+            end
+        else
+            return false
+        end
+
+        local tgt = _NT_CONFIG.targetUser
+        if type(tgt) == "string" and tgt ~= "" then
+            if (lp and pName:lower() == lp.Name:lower()) or (pObj and lp and pObj == lp) then
+                return true
+            end
+            if pName:lower() == tgt:lower() then
+                return true
+            end
+            return false
+        end
+
+        if (lp and pName:lower() == lp.Name:lower()) or (pObj and lp and pObj == lp) then
+            return true
+        end
+
+        local State = ctx.State or rawget(_genv, "State") or {}
+        if State and State.VerifiedPeers and pObj and State.VerifiedPeers[pObj] ~= nil then
+            return true
+        end
+
+        if AdminNames and (AdminNames[pName] == true or (pUserId ~= "" and AdminNames[pUserId] == true)) then
+            return true
+        end
+        if NameOverrides and (NameOverrides[pName] ~= nil or (pUserId ~= "" and NameOverrides[pUserId] ~= nil)) then
+            return true
+        end
+
+        if _NT_CONFIG.roleUsers then
+            for _, users in pairs(_NT_CONFIG.roleUsers) do
+                if type(users) == "table" then
+                    for _, u in ipairs(users) do
+                        local us = tostring(u)
+                        if us:lower() == pName:lower() or (pUserId ~= "" and us == pUserId) then
+                            return true
+                        end
+                    end
+                end
+            end
+        end
+
+        return _NT_CONFIG.showAllPlayers ~= false or _NT_CONFIG.allPlayers == true
+    end
+
+    local function _NT_isAdmin(p)
+        if not p then
+            return false
+        end
+        if AdminNames[p.Name] == true or AdminNames[tostring(p.UserId)] == true then
+            return true
+        end
+        local lp = LocalPlayer or _SvcPlr.LocalPlayer
+        if lp and p == lp then
+            local v = ctx.IsLocalAdmin
+            if type(v) == "function" then
+                local ok, r = pcall(v)
+                return (ok and r) and true or false
+            end
+            return v and true or false
+        end
+        return false
+    end
+
+    local _NT_ROLE_PRIO = { owner = 7, developer = 6, admin = 5, moderator = 4, staff = 3, advertising = 2, user = 1 }
+    local _NT_KEYWORD_ORDER = { "owner", "developer", "admin", "moderator", "staff", "advertising" }
+
+    local function _NT_findOverride(playerName, playerUserId)
+        local override = NameOverrides[playerName]
+        if not override and playerUserId then
+            override = NameOverrides[playerUserId]
+        end
+        return override
+    end
+
+    local function _NT_resolveThemeKey(playerName, playerUserId, isAdmin)
+        local override = _NT_findOverride(playerName, playerUserId)
+        local roleLabel = _NT_CONFIG.roleLabels and _NT_CONFIG.roleLabels[playerName] or (override and override.role)
+        local roleLower = (roleLabel or (isAdmin and "TL Admin" or "TL User")):lower()
+        local displayLower = (override and override.display or ""):lower()
+        local nameLower = playerName:lower()
+        local themeKey = "user"
+        local highestPrio = 0
+
+        for role, users in pairs(_NT_CONFIG.roleUsers or {}) do
+            for _, u in ipairs(type(users) == "table" and users or {}) do
+                local us = tostring(u)
+                if us:lower() == nameLower or (playerUserId and us == playerUserId) then
+                    local prio = _NT_ROLE_PRIO[role] or 0
+                    if prio > highestPrio then
+                        highestPrio = prio
+                        themeKey = role
+                    end
+                    break
+                end
+            end
+        end
+
+        if themeKey == "user" then
+            local kwTable = _NT_CONFIG.roleKeywords or {}
+            local function matchRole(tk)
+                local keywords = kwTable[tk]
+                if type(keywords) ~= "table" then
+                    return false
+                end
+                for _, kw in ipairs(keywords) do
+                    if type(kw) == "string" and kw ~= "" then
+                        local k = kw:lower()
+                        if roleLower:find(k, 1, true) or displayLower:find(k, 1, true) then
+                            return true
+                        end
+                    end
+                end
+                return false
+            end
+            for _, tk in ipairs(_NT_KEYWORD_ORDER) do
+                if matchRole(tk) then
+                    themeKey = tk
+                    break
+                end
+            end
+            if themeKey == "user" then
+                for tk in pairs(kwTable) do
+                    if tk ~= "user" and matchRole(tk) then
+                        themeKey = tk
+                        break
+                    end
+                end
+            end
+        end
+
+        if themeKey == "user" and isAdmin then
+            themeKey = "admin"
+        end
+        return themeKey
+    end
+
+    local function _NT_isAlwaysVisible(playerName, playerUserId, isAdmin)
+        local roles = _NT_CONFIG.alwaysVisibleRoles
+        if type(roles) ~= "table" then
+            return false
+        end
+        local themeKey = _NT_resolveThemeKey(playerName, playerUserId, isAdmin)
+        for _, role in ipairs(roles) do
+            if role == themeKey then
+                return true
+            end
+        end
+        return false
+    end
+
+    local function _NT_shouldShowNametag(p, isAdmin)
+        local pObj = typeof(p) == "Instance" and p or nil
+        if not pObj and type(p) == "string" then
+            pObj = _SvcPlr:FindFirstChild(p)
+        end
+        local pName = pObj and pObj.Name or (type(p) == "string" and p or nil)
+        if not pName then
+            return false
+        end
+        local pUserId = pObj and tostring(pObj.UserId) or nil
+
+        local lp = LocalPlayer or _SvcPlr.LocalPlayer
+        if lp and pName:lower() == lp.Name:lower() then
+            return not (_NT_CONFIG.removeOwnNametag or (ctx.settingsState and ctx.settingsState.removeNametag))
+        end
+
+        isAdmin = isAdmin or (pObj and _NT_isAdmin(pObj)) or false
+        if isAdmin or _NT_isAlwaysVisible(pName, pUserId, isAdmin) then
+            return true
+        end
+
+        local State = ctx.State or rawget(_genv, "State") or {}
+        if State.NametagVisibility and pObj and State.NametagVisibility[pObj] == false then
+            return false
+        end
+        local hidden = _NT_CONFIG.hiddenUsers
+        if type(hidden) == "table" and (hidden[pName] or (pUserId and hidden[pUserId])) then
+            return false
+        end
+        return true
+    end
+
+    local creatingNametag = {}
+    local function CreateCustomNametag(character, playerName, isAdmin)
+        if not character then
+            return
+        end
+        if not playerName or playerName == "" then
+            return
+        end
+
+        local pObj = _SvcPlr:FindFirstChild(playerName)
+
+        if not DoesPlayerQualifyForNametag(pObj or playerName) then
+            local existing = _findExistingBillboard(playerName)
+            if existing then
+                pcall(function()
+                    existing:Destroy()
+                end)
+            end
+            return
+        end
+
+        if not _NT_shouldShowNametag(pObj or playerName, isAdmin) then
+            local existing = _findExistingBillboard(playerName)
+            if existing then
+                pcall(function()
+                    existing:Destroy()
+                end)
+            end
+            return
+        end
+
+        if creatingNametag[playerName] == character then
+            return
+        end
+        creatingNametag[playerName] = character
+        task.delay(1.5, function()
+            if creatingNametag[playerName] == character then
+                creatingNametag[playerName] = nil
+            end
+        end)
+        local _ntOk, _ntErr = pcall(function()
+            local player = _SvcPlr:FindFirstChild(playerName)
+            local playerUserId = player and tostring(player.UserId) or nil
+
+            local override = NameOverrides[playerName]
+            if not override and playerUserId then
+                override = NameOverrides[playerUserId]
+            end
+
+            local displayName = _NT_CONFIG.displayNames and _NT_CONFIG.displayNames[playerName]
+                or (override and override.display or playerName)
+            local roleLabel = _NT_CONFIG.roleLabels and _NT_CONFIG.roleLabels[playerName]
+                or (override and override.role or nil)
+
+            local themeKey = _NT_resolveThemeKey(playerName, playerUserId, isAdmin)
+
+            if themeKey == "user" and displayName == playerName and player then
+                local robloxDisplayName = player:FindFirstChild("DisplayName")
+                if robloxDisplayName and robloxDisplayName.Value ~= "" then
+                    displayName = robloxDisplayName.Value
+                end
+            end
+
+            if not roleLabel then
+                local _NT_ROLE_DEFAULTS = {
+                    user = "TL User",
+                    admin = "TL Admin",
+                    owner = "TL Owner",
+                    developer = "TL Developer",
+                    advertising = "TL Advertising",
+                    moderator = "TL Moderator",
+                    staff = "TL Staff",
+                }
+                roleLabel = (_NT_CONFIG.roleDisplayNames and _NT_CONFIG.roleDisplayNames[themeKey])
+                    or _NT_ROLE_DEFAULTS[themeKey]
+                    or "TL User"
+            end
+
+            local theme = _NT_CONFIG.themes[themeKey] or _NT_DEFAULTS.themes.user
+            local customAvatar = _NT_CONFIG.customAvatars[playerName] or customUserAvatars[playerName]
+
+            local _userColorOvr = _NT_CONFIG.userColorOverrides and _NT_CONFIG.userColorOverrides[playerName]
+            if _userColorOvr and _userColorOvr.__enabled then
+                theme = _NT_deepCopy(theme)
+                for k, v in pairs(_userColorOvr) do
+                    if k ~= "__enabled" and v ~= nil then
+                        if v == "transparent" then
+                            theme[k] = Color3.new(1, 1, 1)
+                            theme[k .. "_transparent"] = true
+                        else
+                            theme[k] = v
+                        end
+                    end
+                end
+            end
+
+            theme = _NT_deepCopy(theme)
+            for _, k in ipairs({ "bg", "avatarBg", "avatarText", "divider", "border", "nameText", "roleText" }) do
+                theme[k] = _NT_parseColor(theme[k])
+            end
+
+            local head = character:WaitForChild("Head", 5)
+            if not head then
+                creatingNametag[playerName] = nil
+                return
+            end
+
+            local existingBB = _findExistingBillboard(playerName)
+            if existingBB then
+                pcall(function()
+                    existingBB:Destroy()
+                end)
+            end
+
+            local bbW = (_NT_CONFIG.layout and _NT_CONFIG.layout.billboardWidth) or 240
+            local bbH = (_NT_CONFIG.layout and _NT_CONFIG.layout.billboardHeight) or 44
+            local offY = (_NT_CONFIG.layout and _NT_CONFIG.layout.studsOffsetY) or 3.4
+
+            local billboard = Instance.new("BillboardGui")
+            billboard.Name = "CovertPeerTag_" .. playerName
+            billboard.Adornee = head
+            billboard.Size = UDim2.new(0, bbW, 0, bbH)
+            billboard.StudsOffset = Vector3.new(0, offY, 0)
+            billboard.AlwaysOnTop = true
+            billboard.LightInfluence = 0
+            billboard.MaxDistance = 250
+
+            local card = Instance.new("Frame")
+            card.Size = UDim2.new(1, 0, 1, 0)
+
+            card.AnchorPoint = Vector2.new(0.5, 0.5)
+            card.Position = UDim2.new(0.5, 0, 0.5, 0)
+            card.BorderSizePixel = 0
+            card.Parent = billboard
+
+            local cardBaseColor = theme.bg
+            if theme.bgGradient and theme.bgGradientColors and #theme.bgGradientColors >= 2 then
+                cardBaseColor = _NT_parseColor(theme.bgGradientColors[1])
+            end
+            card.BackgroundColor3 = cardBaseColor
+            card.BackgroundTransparency = 1
+
+            local cardScale = Instance.new("UIScale")
+            cardScale.Scale = 1
+            cardScale.Parent = card
+
+            if theme.bgGradient then
+                card.BackgroundTransparency = 1
+                local gradCfg = {
+                    enabled = true,
+                    type = theme.bgGradientType or "Linear",
+                    colors = theme.bgGradientColors or { "#1A1A22", "#0E0E18" },
+                    transparency = { 0, 0 },
+                    rotation = theme.bgGradientAngle or theme.bgGradientRotation or 0,
+                    offset = { 0, 0 },
+                }
+                _NT_applyGradient(card, gradCfg)
+            end
+
+            local cardCorner = Instance.new("UICorner")
+            cardCorner.CornerRadius = UDim.new(0, _NT_CONFIG.layout.cornerRadius)
+            cardCorner.Parent = card
+
+            local cardBorder = Instance.new("UIStroke")
+            cardBorder.Color = theme.border
+            cardBorder.Thickness = _NT_CONFIG.layout.borderThickness
+            cardBorder.Transparency = 1
+            cardBorder.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+            cardBorder.Parent = card
+            if customAvatar and customAvatar.strokeColor then
+                cardBorder.Color = Color3.new(1, 1, 1)
+                local grad = Instance.new("UIGradient", cardBorder)
+                local sc = customAvatar.strokeColor
+                if typeof(sc) == "ColorSequence" then
+                    grad.Color = sc
+                elseif typeof(sc) == "Color3" then
+                    grad.Color = ColorSequence.new(sc)
+                elseif type(sc) == "table" then
+                    grad.Color = (_NT_buildColorSeq(sc))
+                elseif type(sc) == "string" then
+                    grad.Color = ColorSequence.new(_NT_parseColor(sc))
+                end
+            end
+
+            local avatar = Instance.new("Frame")
+            avatar.Size = UDim2.new(0, _NT_CONFIG.layout.avatarWidth, 1, 0)
+            avatar.Position = UDim2.new(0, 0, 0, 0)
+            avatar.BackgroundColor3 = theme.avatarBg
+            avatar.BackgroundTransparency = 0
+            avatar.BorderSizePixel = 0
+            avatar.ZIndex = 2
+            avatar.Parent = card
+
+            local avatarCorner = Instance.new("UICorner")
+            avatarCorner.CornerRadius = UDim.new(0, _NT_CONFIG.layout.cornerRadius)
+            avatarCorner.Parent = avatar
+
+            local function _NT_resolveProfilePic(roleKey)
+                local pic = _NT_CONFIG.profilePictures and _NT_CONFIG.profilePictures[roleKey]
+                if type(pic) ~= "table" then
+                    return nil
+                end
+                return _NT_resolveAsset(pic.file, pic.url)
+            end
+
+            local avPad = _NT_CONFIG.layout.avatarImagePadding or 3
+            local avInset = avPad * 2
+            local initLabel = nil
+
+            local avatarImage, avatarScale = nil, Enum.ScaleType.Crop
+            if customAvatar then
+                local cFile, cUrl
+                if type(customAvatar) == "table" then
+                    cFile, cUrl = customAvatar.file, customAvatar.url
+                elseif type(customAvatar) == "string" then
+                    cUrl = customAvatar
+                end
+                avatarImage = _NT_resolveAsset(cFile, cUrl)
+            elseif themeKey == "owner" or themeKey == "user" then
+                avatarImage = _NT_resolveProfilePic(themeKey)
+                avatarScale = Enum.ScaleType.Fit
+            else
+                local tagImg = _NT_CONFIG.tagImages and _NT_CONFIG.tagImages[themeKey]
+                local profPic = _NT_CONFIG.profilePictures and _NT_CONFIG.profilePictures[themeKey]
+                if
+                    type(tagImg) == "table"
+                    and ((tagImg.file and tagImg.file ~= "") or (tagImg.url and tagImg.url ~= ""))
+                then
+                    avatarImage = _NT_resolveAsset(tagImg.file, tagImg.url)
+                elseif type(profPic) == "table" then
+                    avatarImage = _NT_resolveAsset(profPic.file, profPic.url)
+                end
+            end
+
+            if avatarImage then
+                local imgLabel = Instance.new("ImageLabel")
+                imgLabel.Size = UDim2.new(1, -avInset, 1, -avInset)
+                imgLabel.Position = UDim2.new(0, avPad, 0, avPad)
+                imgLabel.BackgroundTransparency = 1
+                imgLabel.Image = avatarImage
+                imgLabel.ScaleType = avatarScale
+                imgLabel.ZIndex = 3
+                imgLabel.Parent = avatar
+                local imgCorner = Instance.new("UICorner")
+                imgCorner.CornerRadius = UDim.new(0, _NT_CONFIG.layout.innerCornerRadius)
+                imgCorner.Parent = imgLabel
+            else
+                initLabel = Instance.new("TextLabel")
+                initLabel.Size = UDim2.new(1, 0, 1, 0)
+                initLabel.BackgroundTransparency = 1
+                initLabel.Text = _NT_getInitials(playerName)
+                initLabel.TextColor3 = theme.avatarText
+                initLabel.Font = _NT_FONT_MAP[_NT_CONFIG.layout.nameFont] or Enum.Font.GothamBold
+                initLabel.TextSize = _NT_CONFIG.layout.initialsTextSize
+                initLabel.ZIndex = 3
+                initLabel.Parent = avatar
+            end
+
+            local avW = _NT_CONFIG.layout.avatarWidth
+            local div = Instance.new("Frame")
+            div.Size = UDim2.new(0, _NT_CONFIG.layout.dividerWidth, _NT_CONFIG.layout.dividerHeightPct, 0)
+            div.Position = UDim2.new(0, avW, (1 - _NT_CONFIG.layout.dividerHeightPct) / 2, 0)
+            div.BackgroundColor3 = theme.divider
+            div.BackgroundTransparency = _NT_CONFIG.layout.dividerTransparency
+            div.BorderSizePixel = 0
+            div.ZIndex = 2
+            div.Parent = card
+
+            local textOffsetX = avW + (_NT_CONFIG.layout.avatarTextGap or 10)
+            local tPadR = _NT_CONFIG.layout.textPaddingRight or 4
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Size = UDim2.new(1, -textOffsetX - tPadR, 0, _NT_CONFIG.layout.nameLabelHeight or 20)
+            nameLabel.Position = UDim2.new(0, textOffsetX, 0, _NT_CONFIG.layout.nameLabelY or 4)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Text = displayName
+            nameLabel.TextColor3 = theme.nameText
+            local nameFontVal = _NT_FONT_MAP[_NT_CONFIG.layout.nameFont] or Enum.Font.GothamBold
+            nameLabel.Font = nameFontVal
+            nameLabel.TextSize = _NT_CONFIG.layout.nameTextSize
+            nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+            nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+            nameLabel.ZIndex = 3
+            nameLabel.Parent = card
+
+            local roleTxt = Instance.new("TextLabel")
+            roleTxt.Size = UDim2.new(1, -textOffsetX - tPadR, 0, _NT_CONFIG.layout.roleLabelHeight or 12)
+            roleTxt.Position = UDim2.new(0, textOffsetX, 0, _NT_CONFIG.layout.roleLabelY or 26)
+            roleTxt.BackgroundTransparency = 1
+            local roleTextVal = roleLabel
+            if _NT_CONFIG.layout.roleTextTransform == "upper" then
+                roleTextVal = string.upper(roleLabel)
+            elseif _NT_CONFIG.layout.roleTextTransform == "lower" then
+                roleTextVal = string.lower(roleLabel)
+            end
+            roleTxt.Text = roleTextVal
+            roleTxt.TextColor3 = theme.roleText
+            local roleFontVal = _NT_FONT_MAP[_NT_CONFIG.layout.roleFont] or Enum.Font.GothamBold
+            roleTxt.Font = roleFontVal
+            roleTxt.TextSize = _NT_CONFIG.layout.roleTextSize
+            roleTxt.TextXAlignment = Enum.TextXAlignment.Left
+            roleTxt.TextTruncate = Enum.TextTruncate.AtEnd
+            roleTxt.ZIndex = 3
+            roleTxt.Parent = card
+
+            if _NT_CONFIG.particles.enabled and _NT_CONFIG.particles.count > 0 then
+                card.ClipsDescendants = true
+                local particleColors = {}
+                for _, hex in ipairs(_NT_CONFIG.particles.colors) do
+                    table.insert(particleColors, _NT_parseColor(hex))
+                end
+                if #particleColors == 0 then
+                    particleColors[1] = Color3.new(1, 1, 1)
+                end
+                local particleConns = {}
+                local pCount = _NT_CONFIG.particles.count
+                for pi = 1, pCount do
+                    local pt = Instance.new("Frame")
+                    local minS = math.max(1, math.floor(tonumber(_NT_CONFIG.particles.minSize) or 2))
+                    local maxS = math.max(minS, math.floor(tonumber(_NT_CONFIG.particles.maxSize) or 4))
+                    local sz = math.random(minS, maxS)
+                    pt.Size = UDim2.new(0, sz, 0, sz)
+                    pt.AnchorPoint = Vector2.new(0.5, 0.5)
+                    pt.Position = UDim2.new(math.random() * 0.8 + 0.1, 0, math.random() * 0.8 + 0.1, 0)
+                    local colorIdx = ((pi - 1) % #particleColors) + 1
+                    pt.BackgroundColor3 = particleColors[colorIdx]
+                    pt.BackgroundTransparency = _NT_CONFIG.particles.transparency
+                    pt.BorderSizePixel = 0
+                    pt.ZIndex = 1
+                    pt.Parent = card
+                    Instance.new("UICorner", pt).CornerRadius = UDim.new(1, 0)
+
+                    local alive = true
+                    particleConns[pi] = pt
+                    task.spawn(function()
+                        while alive and pt and pt.Parent and _tlAlive() do
+                            local tx = math.random() * 0.8 + 0.1
+                            local ty = math.random() * 0.8 + 0.1
+                            local dMin =
+                                math.max(1, math.floor((tonumber(_NT_CONFIG.particles.moveDurationMin) or 3) * 10))
+                            local dMax =
+                                math.max(dMin, math.floor((tonumber(_NT_CONFIG.particles.moveDurationMax) or 5) * 10))
+                            local dur = math.random(dMin, dMax) / 10
+                            twP(pt, dur, { Position = UDim2.new(tx, 0, ty, 0) }):Play()
+                            task.wait(dur)
+                        end
+                    end)
+                end
+                billboard.Destroying:Connect(function()
+                    for _, v in ipairs(particleConns) do
+                        if v then
+                            v:Destroy()
+                        end
+                    end
+                    _NT_stopGradientAnims(billboard)
+                end)
+            end
+
+            billboard.Parent = head or character or _getGuiContainer()
+
+            billboard.Destroying:Connect(function()
+                _NT_stopGradientAnims(billboard)
+            end)
+
+            local fadeDur = (_NT_CONFIG.animations and _NT_CONFIG.animations.fadeInDuration) or 0.25
+            local fadeEasing = _NT_EASING_MAP[_NT_CONFIG.animations and _NT_CONFIG.animations.fadeInEasing]
+                or Enum.EasingStyle.Quad
+            local fadeInfo = TweenInfo.new(fadeDur, fadeEasing)
+            local targetCardTransp = (_NT_CONFIG.animations and _NT_CONFIG.animations.cardTransparency) or 0
+            local targetBorderTransp = (_NT_CONFIG.animations and _NT_CONFIG.animations.borderTransparency) or 0.3
+            local tw1 = TweenService:Create(card, fadeInfo, { BackgroundTransparency = targetCardTransp })
+            local tw2 = TweenService:Create(cardBorder, fadeInfo, { Transparency = targetBorderTransp })
+            pcall(function()
+                tw1:Play()
+            end)
+            pcall(function()
+                tw2:Play()
+            end)
+
+            local activeGradients = _NT_resolveGradientSet(playerName, themeKey, theme)
+            _NT_applyAllGradients(billboard, card, avatar, nameLabel, roleTxt, cardBorder, activeGradients)
+
+            if _userColorOvr and _userColorOvr.__enabled then
+                if theme.avatarBg_transparent then
+                    avatar.BackgroundTransparency = 1
+                end
+                if theme.border_transparent then
+                    cardBorder.Transparency = 1
+                end
+                if theme.divider_transparent then
+                    div.BackgroundTransparency = 1
+                end
+                if theme.avatarText_transparent then
+                    if initLabel then
+                        initLabel.TextTransparency = 1
+                    end
+                end
+            end
+
+            if _NT_CONFIG.layout.distanceScaleEnabled then
+                local dsNear = _NT_CONFIG.layout.distanceScaleNear or 10
+                local dsFar = _NT_CONFIG.layout.distanceScaleFar or 60
+                local dsMin = _NT_CONFIG.layout.distanceScaleMin or 0.35
+                if dsFar <= dsNear then
+                    dsFar = dsNear + 1
+                end
+                local dsAlive = true
+                billboard.Destroying:Connect(function()
+                    dsAlive = false
+                end)
+                task.spawn(function()
+                    while dsAlive and billboard and billboard.Parent do
+                        local cam = workspace.CurrentCamera
+                        if cam and head and head.Parent then
+                            local dist = (head.Position - cam.CFrame.Position).Magnitude
+                            local scale = 1
+                            if dist > dsNear then
+                                scale = math.clamp(1 - (dist - dsNear) / (dsFar - dsNear), dsMin, 1)
+                            end
+                            cardScale.Scale = scale
+                        end
+                        task.wait(0.15)
+                    end
+                end)
+            end
+
+            tw1.Completed:Connect(function()
+                if creatingNametag[playerName] == character then
+                    creatingNametag[playerName] = nil
+                end
+            end)
+        end)
+        if not _ntOk then
+            creatingNametag[playerName] = nil
+            warn("[NametagSystem] " .. tostring(_ntErr))
+        end
+    end
+
+    local function RemoveNametag(playerOrName)
+        local pName = type(playerOrName) == "string" and playerOrName or (playerOrName and playerOrName.Name) or ""
+        if pName == "" then
+            return
+        end
+        local existing = _findExistingBillboard(pName)
+        if existing then
+            pcall(function()
+                existing:Destroy()
+            end)
+        end
+        creatingNametag[pName] = nil
+    end
+
+    local function RemoveAll()
+        for _, p in ipairs(_SvcPlr:GetPlayers()) do
+            RemoveNametag(p.Name)
+        end
+        local container = _getGuiContainer()
+        if container then
+            for _, desc in ipairs(container:GetDescendants()) do
+                if desc:IsA("BillboardGui") and desc.Name:sub(1, 14) == "CovertPeerTag_" then
+                    pcall(function()
+                        desc:Destroy()
+                    end)
+                end
+            end
+        end
+    end
+
+    local _NT_lastShown = {}
+    local _NT_pollAlive = true
+
+    local function _NT_evaluate(p)
+        local isAdm = _NT_isAdmin(p)
+        local show = DoesPlayerQualifyForNametag(p) and _NT_shouldShowNametag(p, isAdm)
+        return show, isAdm
+    end
+
+    local function UpdateAll()
+        for _, p in ipairs(_SvcPlr:GetPlayers()) do
+            local show, isAdm = _NT_evaluate(p)
+            _NT_lastShown[p.Name] = show
+            local char = p.Character
+            if char and char.Parent then
+                if show then
+                    task.spawn(CreateCustomNametag, char, p.Name, isAdm)
+                else
+                    RemoveNametag(p.Name)
+                end
+            end
+        end
+    end
+    _NT_onConfigLoaded = UpdateAll
+
+    local function SetNametagHidden(playerOrName, hidden)
+        local pObj = typeof(playerOrName) == "Instance" and playerOrName
+            or _SvcPlr:FindFirstChild(tostring(playerOrName))
+        local pName = pObj and pObj.Name or tostring(playerOrName)
+        _NT_CONFIG.hiddenUsers = type(_NT_CONFIG.hiddenUsers) == "table" and _NT_CONFIG.hiddenUsers or {}
+        _NT_CONFIG.hiddenUsers[pName] = hidden and true or nil
+        if pObj then
+            local show, isAdm = _NT_evaluate(pObj)
+            _NT_lastShown[pName] = show
+            local char = pObj.Character
+            if show and char and char.Parent then
+                task.spawn(CreateCustomNametag, char, pName, isAdm)
+            elseif not show then
+                RemoveNametag(pName)
+            end
+        end
+    end
+
+    task.spawn(function()
+        while _NT_pollAlive and _tlAlive() do
+            task.wait(1)
+            for _, p in ipairs(_SvcPlr:GetPlayers()) do
+                local show, isAdm = _NT_evaluate(p)
+                local prev = _NT_lastShown[p.Name]
+                _NT_lastShown[p.Name] = show
+                if prev ~= nil and prev ~= show then
+                    local char = p.Character
+                    if show then
+                        if char and char.Parent then
+                            task.spawn(CreateCustomNametag, char, p.Name, isAdm)
+                        end
+                    else
+                        RemoveNametag(p.Name)
+                    end
+                end
+            end
+        end
+    end)
+
+    local function Destroy()
+        _NT_pollAlive = false
+        RemoveAll()
+    end
+
+    local function _NT_hookPlayer(player)
+        player.CharacterAdded:Connect(function(char)
+            task.wait(0.5)
+            if char.Parent then
+                local show, isAdm = _NT_evaluate(player)
+                _NT_lastShown[player.Name] = show
+                if show then
+                    CreateCustomNametag(char, player.Name, isAdm)
+                end
+            end
+        end)
+    end
+
+    _SvcPlr.PlayerAdded:Connect(_NT_hookPlayer)
+    _SvcPlr.PlayerRemoving:Connect(function(player)
+        _NT_lastShown[player.Name] = nil
+        RemoveNametag(player.Name)
+    end)
+    for _, player in ipairs(_SvcPlr:GetPlayers()) do
+        _NT_hookPlayer(player)
+    end
+
+    task.delay(0.5, UpdateAll)
+
+    NametagSystem.CreateNametag = CreateCustomNametag
+    NametagSystem.CreateCustomNametag = CreateCustomNametag
+    NametagSystem.DoesPlayerQualify = DoesPlayerQualifyForNametag
+    NametagSystem.DoesPlayerQualifyForNametag = DoesPlayerQualifyForNametag
+    NametagSystem.ReloadConfig = _NT_loadConfig
+    NametagSystem.RemoveNametag = RemoveNametag
+    NametagSystem.RemoveAll = RemoveAll
+    NametagSystem.UpdateAll = UpdateAll
+    NametagSystem.SetNametagHidden = SetNametagHidden
+    NametagSystem.Destroy = Destroy
+    NametagSystem.Config = _NT_CONFIG
+
+    return {
+        CreateCustomNametag = CreateCustomNametag,
+        CreateNametag = CreateCustomNametag,
+        DoesPlayerQualifyForNametag = DoesPlayerQualifyForNametag,
+        DoesPlayerQualify = DoesPlayerQualifyForNametag,
+        _NT_CONFIG = _NT_CONFIG,
+        Config = _NT_CONFIG,
+        _NT_loadConfig = _NT_loadConfig,
+        ReloadConfig = _NT_loadConfig,
+        RemoveNametag = RemoveNametag,
+        RemoveAll = RemoveAll,
+        UpdateAll = UpdateAll,
+        SetNametagHidden = SetNametagHidden,
+        Destroy = Destroy,
+    }
 end
 
-return PlayerlistTab
+NametagSystem.CreateNametag = function(...) end
+NametagSystem.CreateCustomNametag = function(...) end
+NametagSystem.DoesPlayerQualify = function()
+    return false
+end
+NametagSystem.DoesPlayerQualifyForNametag = function()
+    return false
+end
+NametagSystem.Config = {}
+NametagSystem.ReloadConfig = function() end
+
+return NametagSystem
