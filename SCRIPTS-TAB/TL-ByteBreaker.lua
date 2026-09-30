@@ -66,8 +66,10 @@ local CFG = {
         bb_piggyback     = true,
         bb_piggyback2    = true,
         bb_backpack      = true,
+        bb_backpackcute  = true,
         bb_headsit       = true,
         bb_shouldersit   = true,
+        bb_shouldersitprincess = true,
     },
 }
 
@@ -81,6 +83,7 @@ local ANIM_IDS = {
     bb_hug2          = "101809619267911",
     bb_layfuck       = "95678189010798",
     bb_backpack      = "73500261613116",
+    bb_backpackcute  = "127094748683643",
     bb_stomach       = "105895909040298",
     bb_kiss          = "102367337136163",
     bb_sucking       = "74402438715168",
@@ -89,6 +92,7 @@ local ANIM_IDS = {
     bb_pussyspread   = "120754278085861",
     bb_soh           = "119898270336796",
     bb_shouldersit   = "119898270336796",
+    bb_shouldersitprincess = "75676199620470",
     bb_friend        = "182435933",
     bb_bangv2        = "107300675038850",
     bb_cuffing       = "137809930492090",
@@ -112,6 +116,7 @@ local ATTACH_MODES = {
     bb_copy          = { x = 4,    y = 0,     z = 0 },
     bb_piggyback     = { x = 0,    y = 0.2,   z = 1.1 },
     bb_backpack      = { x = 0,    y = 2.5,   z = 1.2 },
+    bb_backpackcute  = { x = 0,    y = 2.5,   z = 1.2 },
     bb_piggyback2    = { x = 0,    y = 0.2,   z = 1.1 },
     bb_carry         = { x = 0.5,  y = -0.5,  z = -1.2 },
     bb_carryshoulder = { x = 1.8,  y = 0.0,   z = 0.9 },
@@ -132,6 +137,7 @@ local ATTACH_MODES = {
     bb_pussyspread   = { x = 0,    y = -2.45, z = -2.0,  osc = 1.5,  oscSpeed = 10 },
     bb_soh           = { y = 1,    headRelative = true },
     bb_shouldersit   = { x = 1.8,  y = 2.2,   z = 0 },
+    bb_shouldersitprincess = { x = 1.8,  y = 2.2,   z = 0 },
     bb_friend        = { x = 3,    y = 0,     z = 0 },
     bb_shit          = { x = 0,    y = 3.5,   z = -1.2 },
     bb_spidergrip    = { x = 0,    y = 0.2,   z = -0.8,  rotY = 180, osc = 0.35, oscSpeed = 0.8 },
@@ -1115,7 +1121,7 @@ function M.startBB(targetPlayer, modeKey)
         animOpts.speed = 2
         Oscillator.reset(modeKey .. "_osc")
     end
-    if modeKey == "bb_soh" or modeKey == "bb_shouldersit" then
+    if modeKey == "bb_soh" or modeKey == "bb_shouldersit" or modeKey == "bb_shouldersitprincess" then
         animOpts.timePos = 2
     end
 
