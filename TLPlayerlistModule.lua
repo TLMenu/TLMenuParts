@@ -254,8 +254,16 @@ function TLPlayerlistModule:Build(cfg)
     self._panel = p
     self._content = c
 
+    local function isOnePieceTheme(tId)
+        local id = tId or cfg._TL_activeThemeId
+            or (_TL_refs and _TL_refs._TL_activeThemeId)
+            or (getgenv and getgenv()._TL_activeThemeId)
+            or "default"
+        return tostring(id):lower() == "onepiece"
+    end
+
     local _OP_PlBgImg                  = Instance.new("ImageLabel")
-    _OP_PlBgImg.Name                   = "TLMenu_OP_PlBg"
+    _OP_PlBgImg.Name                   = "OnePieceBg"
     _OP_PlBgImg.Size                   = UDim2.new(1, 0, 1, 0)
     _OP_PlBgImg.Position               = UDim2.new(0, 0, 0, 0)
     _OP_PlBgImg.BackgroundTransparency = 1
@@ -263,10 +271,12 @@ function TLPlayerlistModule:Build(cfg)
     _OP_PlBgImg.ScaleType              = Enum.ScaleType.Crop
     _OP_PlBgImg.ImageTransparency      = 0.35
     _OP_PlBgImg.ZIndex                 = 1
-    _OP_PlBgImg.Visible                = (_TL_activeThemeId == "onepiece")
+    _OP_PlBgImg.Visible                = isOnePieceTheme(_TL_activeThemeId)
     _OP_PlBgImg.Parent                 = p
     corner(_OP_PlBgImg, 12)
-    _TL_refs._OP_PlBgImg              = _OP_PlBgImg
+    if _TL_refs then
+        _TL_refs._OP_PlBgImg          = _OP_PlBgImg
+    end
 
     local PAD                         = 16
     local PW                          = PANEL_W - PAD * 2
@@ -1124,8 +1134,18 @@ function TLPlayerlistModule:Build(cfg)
         searchBox:CaptureFocus()
     end)
 
-    panelColorHooks[#panelColorHooks + 1] = function()
+    panelColorHooks[#panelColorHooks + 1] = function(newT)
+        local curThemeId = (newT and (newT.id or newT.name))
+            or (_TL_refs and _TL_refs._TL_activeThemeId)
+            or (getgenv and getgenv()._TL_activeThemeId)
+            or "default"
+        local isOP = (tostring(curThemeId):lower() == "onepiece")
+        if _OP_PlBgImg and _OP_PlBgImg.Parent then
+            _OP_PlBgImg.Visible = isOP
+        end
+
         pcall(function() p.BackgroundColor3 = C.panelBg end)
+        pcall(function() p.BackgroundTransparency = 0 end)
         pcall(function() countBadge.BackgroundColor3 = C.accent end)
         pcall(function() countLbl.TextColor3 = C.accent end)
         pcall(function() hdrLine.BackgroundColor3 = C.bg3 or _C3_BG3 end)
