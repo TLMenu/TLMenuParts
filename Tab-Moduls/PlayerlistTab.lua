@@ -4,17 +4,137 @@ local PlayerlistTab = {}
 PlayerlistTab.__index = PlayerlistTab
 
 local trackedStaff = {}
-local trackedCat = {}
+local trackedCat   = {}
 local staffCheckCache = {}
 
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ROLE SYSTEM  (merged from TL-Detector-Prototyp1.lua)
+-- ─────────────────────────────────────────────────────────────────────────────
+
 local ROLE_COLORS = {
-    Owner      = Color3.fromRGB(255, 200, 0),
-    Admin      = Color3.fromRGB(220, 40, 40),
-    Moderator  = Color3.fromRGB(0, 170, 255),
-    Creator    = Color3.fromRGB(10, 45, 150),
-    Management = Color3.fromRGB(255, 140, 0),
+    Owner        = Color3.fromRGB(255, 200,  0),
+    Admin        = Color3.fromRGB(220,  40, 40),
+    RobloxStaff  = Color3.fromRGB(255,  60, 60),
+    Moderator    = Color3.fromRGB(  0, 170, 255),
+    Staff        = Color3.fromRGB( 50, 140, 255),
+    Creator      = Color3.fromRGB( 10,  45, 150),
+    VideoStar    = Color3.fromRGB(180,  60, 220),
+    Management   = Color3.fromRGB(255, 140,  0),
 }
 local ROLE_FALLBACK_COLOR = Color3.fromRGB(90, 95, 110)
+
+-- Human-readable pill labels per category
+local ROLE_PILL_LABEL = {
+    Owner       = "Owner",
+    Admin       = "Admin",
+    RobloxStaff = "Roblox Staff",
+    Moderator   = "Moderator",
+    Staff       = "Staff",
+    Creator     = "Content Creator",
+    VideoStar   = "Video Star",
+    Management  = "Management",
+}
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- RANK MANAGER  (RoProxy HTTP group-rank scanner)
+-- ─────────────────────────────────────────────────────────────────────────────
+local _RM_CONFIG = {
+    RoProxyUrl    = "https://groups.roproxy.com/v1/users/%d/groups/roles",
+    CacheTTL      = 30,
+    RequestDelay  = 0.35,
+    RetryAttempts = 3,
+}
+
+local RankManager = {
+    _cache       = {},
+    _queue       = {},
+    _processing  = false,
+    _connections = {},
+    _listeners   = {},
+}
+
+function RankManager:Cleanup()
+    for _, conn in ipairs(self._connections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    table.clear(self._cache)
+    table.clear(self._queue)
+    table.clear(self._listeners)
+end
+
+function RankManager:OnUpdate(callback)
+    table.insert(self._listeners, callback)
+end
+
+local function _RM_httpGet(url)
+    local ok, res = pcall(function()
+        local fn = (rawget(_G, "request") or rawget(_G, "http_request")
+            or (rawget(_G, "syn") and rawget(rawget(_G, "syn"), "request")))
+        if not fn then error("no http fn") end
+        return fn({ Url = url, Method = "GET" })
+    end)
+    if ok and res and (res.StatusCode == 200 or res.Success) then return res.Body end
+    return nil
+end
+
+local function _RM_fetchRoProxy(userId, groupId)
+    local url  = string.format(_RM_CONFIG.RoProxyUrl, userId)
+    local body = _RM_httpGet(url)
+    if body then
+        local HttpService = game:GetService("HttpService")
+        local ok, decoded = pcall(function() return HttpService:JSONDecode(body) end)
+        if ok and decoded and decoded.data then
+            for _, entry in ipairs(decoded.data) do
+                if entry.group and entry.group.id == groupId then
+                    return { rank = entry.role.rank, role = entry.role.name, failed = false }
+                end
+            end
+            return { rank = 0, role = "Non-Member", failed = false }
+        end
+    end
+    return nil
+end
+
+local function _RM_fetchNative(player, groupId)
+    for _ = 1, _RM_CONFIG.RetryAttempts do
+        local ok, rank = pcall(function() return player:GetRankInGroup(groupId) end)
+        if ok then
+            local _, role = pcall(function() return player:GetRoleInGroup(groupId) end)
+            return { rank = rank, role = role or "Member", failed = false }
+        end
+        task.wait(1)
+    end
+    return { failed = true }
+end
+
+function RankManager:_processQueue(groupId)
+    if self._processing then return end
+    self._processing = true
+    task.spawn(function()
+        while #self._queue > 0 do
+            local item = table.remove(self._queue, 1)
+            local data = _RM_fetchRoProxy(item.userId, groupId)
+                      or _RM_fetchNative(item.player, groupId)
+            data.timestamp         = os.clock()
+            self._cache[item.userId] = data
+            item.callback(data)
+            task.wait(_RM_CONFIG.RequestDelay)
+        end
+        self._processing = false
+    end)
+end
+
+function RankManager:GetPlayerRank(player, groupId, callback)
+    local cached = self._cache[player.UserId]
+    if cached and (os.clock() - cached.timestamp) < _RM_CONFIG.CacheTTL then
+        callback(cached)
+        return
+    end
+    table.insert(self._queue, { userId = player.UserId, player = player, callback = callback })
+    self:_processQueue(groupId)
+end
+
+-- ─────────────────────────────────────────────────────────────────────────────
 
 local function sendStaffDetectorNotification(_TL_refs, title, text, color)
     local settingsState = _TL_refs and _TL_refs._TL_settingsState
@@ -65,15 +185,17 @@ local function classifyRole(text)
     if s:find("free admin", 1, true) then return nil end
     if s:find("owner", 1, true) or s:find("besitzer", 1, true) then return "Owner" end
     if s:find("manage", 1, true) or s:find("leitung", 1, true) then return "Management" end
-    if s:find("creator", 1, true) or s:find("youtube", 1, true) or s:find("tiktok", 1, true)
-        or s:find("twitch", 1, true) or s:find("video star", 1, true)
-        or s:find("influencer", 1, true) or s:find("streamer", 1, true) then
+    if s:find("youtube", 1, true) or s:find("tiktok", 1, true)
+        or s:find("twitch", 1, true) or s:find("influencer", 1, true)
+        or s:find("streamer", 1, true) or s:find("content creator", 1, true) then
         return "Creator"
     end
-    if s:find("roblox staff", 1, true) or s:find("admin", 1, true) then return "Admin" end
-    if s:find("moderat", 1, true) or s:find("%f[%a]mod%f[%A]") or s:find("staff", 1, true) then
-        return "Moderator"
-    end
+    if s:find("video star", 1, true) then return "VideoStar" end
+    if s:find("creator", 1, true) then return "Creator" end
+    if s:find("roblox staff", 1, true) then return "RobloxStaff" end
+    if s:find("admin", 1, true) then return "Admin" end
+    if s:find("moderat", 1, true) or s:find("%f[%a]mod%f[%A]") then return "Moderator" end
+    if s:find("staff", 1, true) then return "Staff" end
     return nil
 end
 
@@ -119,12 +241,12 @@ local function checkPlayerForStaff(plr, LocalPlayer)
 
     local successRoblox, rankRoblox = pcall(function() return plr:GetRankInGroup(1200769) end)
     if successRoblox and type(rankRoblox) == "number" and rankRoblox > 0 then
-        return true, "Roblox Staff", "Admin"
+        return true, "Roblox Staff", "RobloxStaff"
     end
 
     local successStar, rankStar = pcall(function() return plr:GetRankInGroup(4199740) end)
     if successStar and type(rankStar) == "number" and rankStar > 0 then
-        return true, "Roblox Video Star", "Creator"
+        return true, "Roblox Video Star", "VideoStar"
     end
 
     local adminSystemRole = nil
@@ -538,11 +660,14 @@ function PlayerlistTab.Init(ctx)
     end
 
     local function getThreatRankInfo(pl)
-        local label, color = getStaffInfo(pl)
-        if not label then
-            return "Player", (C.bg3 or _C3_BG3), 0.35, (C.sub or Color3.fromRGB(120, 120, 130))
+        local _, color, cat = getStaffInfo(pl)
+        if not cat then
+            -- Default: "User" pill (grey)
+            return "User", (C.bg3 or _C3_BG3), 0.35, (C.sub or Color3.fromRGB(120, 120, 130))
         end
-        return label, color, 0.15, Color3.new(1, 1, 1)
+        -- Map category to friendly pill label
+        local pillLabel = ROLE_PILL_LABEL[cat] or cat
+        return pillLabel, color, 0.15, Color3.new(1, 1, 1)
     end
 
     local rebuildList
@@ -869,7 +994,7 @@ function PlayerlistTab.Init(ctx)
         rankTxt.BackgroundTransparency = 1
         rankTxt.Font                = Enum.Font.GothamBold
         rankTxt.TextSize            = 8
-        rankTxt.Text                = "Player"
+        rankTxt.Text                = "User"
         rankTxt.TextColor3          = C.sub or Color3.fromRGB(120, 120, 130)
         rankTxt.TextXAlignment      = Enum.TextXAlignment.Center
         rankTxt.TextTruncate        = Enum.TextTruncate.AtEnd
@@ -1209,9 +1334,42 @@ function PlayerlistTab.Init(ctx)
 
     rebuildList()
 
+    -- ── Immediate scan: native checks for all current players ────────────────
     for _, pl in ipairs(Players:GetPlayers()) do
         runStaffCheck(_TL_refs, pl, true, 0, nil, LocalPlayer)
     end
+
+    -- ── RoProxy group-rank scan for game creator group (if group game) ───────
+    task.spawn(function()
+        if not game:IsLoaded() then game.Loaded:Wait() end
+        if game.CreatorType == Enum.CreatorType.Group then
+            local groupId = game.CreatorId
+            RankManager:OnUpdate(function(players)
+                for _, pl in ipairs(players) do
+                    if pl ~= LocalPlayer then
+                        RankManager:GetPlayerRank(pl, groupId, function(data)
+                            if data and not data.failed and data.rank and data.rank > 0 then
+                                local roleName = tostring(data.role or "")
+                                local cat = classifyRole(roleName)
+                                if not cat and not isPerkRole(roleName) then
+                                    cat = data.rank >= 200 and "Admin"
+                                       or data.rank >= 100 and "Moderator"
+                                       or (data.rank > (getGroupBaseRank(groupId) or 1) and "Staff")
+                                       or nil
+                                end
+                                if cat then
+                                    setStaffState(_TL_refs, pl, true,
+                                        "Group Role: " .. roleName, true, cat)
+                                end
+                            end
+                        end)
+                    end
+                end
+            end)
+            RankManager:Init(groupId)
+        end
+    end)
+
     task.spawn(function()
         task.wait(1.2)
         if not next(trackedStaff) then
