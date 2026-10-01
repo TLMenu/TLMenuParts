@@ -405,6 +405,7 @@ function NametagSystem.Init(ctx)
 
                 
     local _NT_CONFIG = {}
+    local _NT_updateAllFn = nil -- Set after UpdateAll is defined; called after remote config loads
 
     local function _NT_deepCopy(orig)
         if type(orig) ~= "table" then return orig end
@@ -554,6 +555,10 @@ function NametagSystem.Init(ctx)
                     end
                 end
             end)
+            -- After both requests finish, rebuild nametags with fresh config
+            if _NT_updateAllFn then
+                task.spawn(_NT_updateAllFn)
+            end
         end)
     end
     _NT_loadConfig()
@@ -1359,6 +1364,7 @@ end
             end
         end
     end
+    _NT_updateAllFn = UpdateAll -- Now that UpdateAll is defined, hook it for async config reload
 
     -- Hook player lifecycle to ONLY create nametags for qualified players
     _SvcPlr.PlayerAdded:Connect(function(player)
@@ -1386,7 +1392,7 @@ end
     end
 
     -- Initial creation for existing qualified players
-    task.delay(0.5, UpdateAll)
+    task.delay(3.0, UpdateAll)
 
     -- Export module functions
     NametagSystem.CreateNametag = CreateCustomNametag
