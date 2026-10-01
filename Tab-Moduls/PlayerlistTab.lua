@@ -507,12 +507,18 @@ function PlayerlistTab.Init(ctx)
     _OP_PlBgImg.ScaleType              = Enum.ScaleType.Crop
     _OP_PlBgImg.ImageTransparency      = 0.35
     _OP_PlBgImg.ZIndex                 = 1
-    _OP_PlBgImg.Visible                = isOnePieceTheme(_TL_activeThemeId)
+    local isOP = isOnePieceTheme(_TL_activeThemeId)
+    _OP_PlBgImg.Visible                = isOP
     _OP_PlBgImg.Parent                 = p
     corner(_OP_PlBgImg, 12)
     if _TL_refs then
         _TL_refs._OP_PlBgImg          = _OP_PlBgImg
     end
+    _OP_PlBgImg:GetPropertyChangedSignal("Visible"):Connect(function()
+        if not isOnePieceTheme() and _OP_PlBgImg.Visible then
+            _OP_PlBgImg.Visible = false
+        end
+    end)
 
     local PAD                         = 16
     local PW                          = PANEL_W - PAD * 2
