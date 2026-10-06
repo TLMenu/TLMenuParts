@@ -8,6 +8,22 @@ local _qb            = {}
 local _qaInitialized   = false
 local _qaStarted       = false
 
+-- ══════════════════════════════════════════════════════════════
+--  DESIGN PALETTE (aus NEW-TLQ-BAR übernommen)
+-- ══════════════════════════════════════════════════════════════
+local QC = {
+    bg           = Color3.fromRGB(8, 8, 14),
+    bgTop        = Color3.fromRGB(14, 14, 22),
+    bgBottom     = Color3.fromRGB(4, 4, 8),
+    accent       = Color3.fromRGB(0, 200, 255),
+    accentGreen  = Color3.fromRGB(80, 230, 100),
+    accentOrange = Color3.fromRGB(240, 200, 60),
+    accentRed    = Color3.fromRGB(240, 80, 80),
+    text         = Color3.fromRGB(255, 255, 255),
+    separator    = Color3.fromRGB(90, 95, 120),
+    glow         = Color3.fromRGB(0, 200, 200),
+}
+
 local P = setmetatable({}, {
     __index = function(_, k)
         local _C = _qb.C or _G.C or {}
@@ -17,10 +33,28 @@ local P = setmetatable({}, {
             _P_STOP_TXT = Color3.fromRGB(224, 72, 72),
         }
 
+        -- Design-Literale: gewinnen IMMER über den Theme-Mapping
         local literals = {
-            stopBg  = stops._P_STOP_BG,
-            stopBrd = stops._P_STOP_BRD,
-            stopTxt = stops._P_STOP_TXT,
+            stopBg   = stops._P_STOP_BG,
+            stopBrd  = QC.accentRed,
+            stopTxt  = QC.accentRed,
+            panel    = QC.bg,
+            hdr      = QC.bgTop,
+            hdrBrd   = QC.separator,
+            panelBrd = QC.accent,
+            title    = QC.text,
+            tgtBg    = QC.bg,
+            tgtTxt   = QC.separator,
+            tgtDot   = QC.accent,
+            card     = QC.bg,
+            cardHov  = QC.bgTop,
+            cardBrd  = QC.separator,
+            lblOff   = QC.separator,
+            lblOn    = QC.text,
+            foot     = QC.bg,
+            footBrd  = QC.separator,
+            badge    = QC.bg,
+            badgeTxt = QC.text,
         }
         if literals[k] then return literals[k] end
 
@@ -730,22 +764,67 @@ function M.startQABar()
             _qb.qaBar = mkF(_qb.ScreenGui,
                 UDim2.new(0, _qb.QA_W, 0, 0),
                 UDim2.new(1, _QA_RIGHT_OFFSET, 0, _QA_TOP_Y),
-                P.panel, 0, 8)
+                P.panel, 0, 6)
             local qaBar = _qb.qaBar
             qaBar.Name = "TLQuickActionsBar"
             qaBar.AnchorPoint = Vector2.new(1, 0)
             qaBar.ClipsDescendants = true
             qaBar.Visible = false; qaBar.ZIndex = 9
 
+            -- Vertikaler Hintergrund-Gradient (bgTop -> bgBottom)
+            local barBgGrad = Instance.new("UIGradient", qaBar)
+            barBgGrad.Rotation = 90
+            barBgGrad.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0.00, QC.bgTop),
+                ColorSequenceKeypoint.new(1.00, QC.bgBottom),
+            })
+
+            -- Glow (Sibling der Bar, da qaBar.ClipsDescendants = true den Child-Glow abschneiden würde)
+            local qaGlow = Instance.new("ImageLabel")
+            qaGlow.Name = "TLQuickActionsBarGlow"
+            qaGlow.AnchorPoint = Vector2.new(1, 0)
+            qaGlow.Position = UDim2.new(1, _QA_RIGHT_OFFSET - 12, 0, _QA_TOP_Y - 12)
+            qaGlow.Size = UDim2.new(0, _qb.QA_W + 24, 0, 24)
+            qaGlow.BackgroundTransparency = 1
+            qaGlow.Image = "rbxassetid://5028857084"
+            qaGlow.ImageColor3 = QC.glow
+            qaGlow.ImageTransparency = 0.75
+            qaGlow.ScaleType = Enum.ScaleType.Slice
+            qaGlow.SliceCenter = Rect.new(24, 24, 276, 276)
+            qaGlow.ZIndex = 1
+            qaGlow.Visible = false
+            qaGlow.Parent = _qb.ScreenGui
+            _qb.qaGlow = qaGlow
+            _conn(qaBar:GetPropertyChangedSignal("Size"):Connect(function()
+                if qaGlow and qaGlow.Parent then
+                    qaGlow.Size = UDim2.new(0, _qb.QA_W + 24, 0, qaBar.Size.Y.Offset + 24)
+                end
+            end))
+            _conn(qaBar:GetPropertyChangedSignal("Visible"):Connect(function()
+                if qaGlow and qaGlow.Parent then qaGlow.Visible = qaBar.Visible end
+            end))
+
             pcall(function() if getgenv then _qb.env._TL_qaBar = qaBar end end)
             pcall(function() _TL_refs._TL_qaBar = qaBar end)
-            _qb._qaBarStroke = mkStroke(_qb.qaBar, 1, P.panelBrd, 0.7)
+            _qb._qaBarStroke = mkStroke(_qb.qaBar, 1, P.panelBrd, 0.85)
+            -- Farbverlauf am Bar-Stroke (blau -> cyan -> gruen)
+            local barStrokeGrad = Instance.new("UIGradient", _qb._qaBarStroke)
+            barStrokeGrad.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0.00, Color3.fromRGB(0, 140, 255)),
+                ColorSequenceKeypoint.new(0.45, Color3.fromRGB(0, 220, 255)),
+                ColorSequenceKeypoint.new(0.55, Color3.fromRGB(0, 240, 180)),
+                ColorSequenceKeypoint.new(1.00, Color3.fromRGB(60, 255, 100)),
+            })
 
             if _isMob or _isTab then
                 local _qaScale    = Instance.new("UIScale", qaBar)
                 _qaScale.Scale    = _TL_VP.mobScl
                 qaBar.AnchorPoint = Vector2.new(1, 0)
                 qaBar.Position    = UDim2.new(1, _QA_RIGHT_OFFSET, 0, _QA_TOP_Y)
+                if _qb.qaGlow then
+                    local _gScale = Instance.new("UIScale", _qb.qaGlow)
+                    _gScale.Scale = _TL_VP.mobScl
+                end
             end
 
             local HDR_H = _qb.HDR_H
@@ -773,7 +852,7 @@ function M.startQABar()
             _qb.tgtBadge = mkF(hdr,
                 UDim2.new(0, 90, 0, 18), UDim2.new(1, -98, 0.5, -9), P.tgtBg, 0.1, 20)
             local tgtBadge = _qb.tgtBadge
-            _qb._tgtBadgeStroke = mkStroke(tgtBadge, 1.5, (_qb.C and _qb.C.accent2), 0); tgtBadge.ZIndex = 11
+            _qb._tgtBadgeStroke = mkStroke(tgtBadge, 1.5, QC.accent, 0); tgtBadge.ZIndex = 11
             local tgtDot = mkF(tgtBadge,
                 UDim2.new(0, 5, 0, 5), UDim2.new(0, 6, 0.5, -2), P.tgtDot, 0, 99)
             tgtDot.ZIndex = 13
@@ -800,9 +879,109 @@ function M.startQABar()
                 end
             end)
 
+            -- ══ INFO-ZEILE: FPS · Ping · Executor (Design aus NEW-TLQ-BAR) ══
+            local INFO_H = 16
+            local infoRow = mkF(qaBar, UDim2.new(1, 0, 0, INFO_H),
+                UDim2.new(0, 0, 0, HDR_H + 1), QC.bg, 1, 0)
+            infoRow.ZIndex = 10
+
+            local function _qaExecutorName()
+                if type(identifyexecutor) == "function" then
+                    local ok, name = pcall(identifyexecutor)
+                    if ok and type(name) == "string" and name ~= "" then return name end
+                end
+                if type(getexecutorname) == "function" then
+                    local ok, name = pcall(getexecutorname)
+                    if ok and type(name) == "string" and name ~= "" then return name end
+                end
+                return "Unknown"
+            end
+
+            local ip = _qb.QA_PAD
+            mkTxt(infoRow, UDim2.new(0, 22, 0, INFO_H), UDim2.new(0, ip, 0, 0),
+                "FPS", Enum.Font.GothamBold, 10, QC.text)
+            local fpsValue = mkTxt(infoRow, UDim2.new(0, 30, 0, INFO_H), UDim2.new(0, ip + 24, 0, 0),
+                "…", Enum.Font.GothamBlack, 11, QC.accentGreen)
+            local fpsSep = mkF(infoRow, UDim2.new(0, 1, 0, 10), UDim2.new(0, ip + 58, 0.5, -5),
+                QC.separator, 0.3, 0)
+            fpsSep.ZIndex = 11
+            local pingValue = mkTxt(infoRow, UDim2.new(0, 42, 0, INFO_H), UDim2.new(0, ip + 64, 0, 0),
+                "…ms", Enum.Font.GothamBlack, 11, QC.accentGreen)
+            local pingSep = mkF(infoRow, UDim2.new(0, 1, 0, 10), UDim2.new(0, ip + 110, 0.5, -5),
+                QC.separator, 0.3, 0)
+            pingSep.ZIndex = 11
+            local execLabel = mkTxt(infoRow, UDim2.new(1, -(ip + 117), 0, INFO_H),
+                UDim2.new(0, ip + 116, 0, 0),
+                _qaExecutorName(), Enum.Font.GothamBold, 10, QC.text)
+            execLabel.ZIndex = 11
+
+            -- Trennlinie unter der Info-Zeile
+            mkF(qaBar, UDim2.new(1, 0, 0, 1), UDim2.new(0, 0, 0, HDR_H + 1 + INFO_H),
+                P.hdrBrd, 0.75, 0).ZIndex = 9
+
+            -- FPS-Live-Update (0.5s-Fenster, Statusfarben)
+            local _qFrames, _qLastT = 0, os.clock()
+            local _qShownFps, _qFpsCol = nil, nil
+            _conn(_qb.RunService.Heartbeat:Connect(function()
+                _qFrames = _qFrames + 1
+                local now = os.clock()
+                local el = now - _qLastT
+                if el < 0.5 then return end
+                local fps = math.floor(_qFrames / el + 0.5)
+                _qFrames, _qLastT = 0, now
+                if fps ~= _qShownFps then
+                    _qShownFps = fps
+                    fpsValue.Text = tostring(fps)
+                end
+                local col = (fps >= 60 and QC.accentGreen) or (fps >= 30 and QC.accentOrange) or QC.accentRed
+                if col ~= _qFpsCol then
+                    _qFpsCol = col
+                    fpsValue.TextColor3 = col
+                end
+            end))
+
+            -- Ping-Live-Update (1s, Statusfarben)
+            task.spawn(function()
+                local item
+                for _ = 1, 10 do
+                    pcall(function()
+                        item = game:GetService("Stats").Network.ServerStatsItem:FindFirstChild("Data Ping")
+                    end)
+                    if item then break end
+                    task.wait(0.5)
+                end
+                local _qShownPing, _qPingCol = nil, nil
+                while qaBar and qaBar.Parent and _qb._tlAlive() do
+                    if not item then
+                        pcall(function()
+                            item = game:GetService("Stats").Network.ServerStatsItem:FindFirstChild("Data Ping")
+                        end)
+                    end
+                    if item then
+                        local ok, v = pcall(function() return item:GetValue() end)
+                        if ok and type(v) == "number" then
+                            local ms = math.floor(v + 0.5)
+                            if ms ~= _qShownPing then
+                                _qShownPing = ms
+                                pingValue.Text = string.format("%dms", ms)
+                            end
+                            local col
+                            if ms < 80 then col = QC.accentGreen
+                            elseif ms < 150 then col = QC.accentOrange
+                            else col = QC.accentRed end
+                            if col ~= _qPingCol then
+                                _qPingCol = col
+                                pingValue.TextColor3 = col
+                            end
+                        end
+                    end
+                    task.wait(1)
+                end
+            end)
+
             local QA_W     = _qb.QA_W
             local QA_PAD   = _qb.QA_PAD
-            local BODY_TOP = HDR_H + 1
+            local BODY_TOP = HDR_H + 1 + INFO_H
             local INNER_W  = QA_W - QA_PAD * 2
             local FOOT_H   = _qb.FOOT_H
             local SCROLL_MAX = _qb.SCROLL_MAX
@@ -829,7 +1008,7 @@ function M.startQABar()
             _qb._panelColorHooks[#_qb._panelColorHooks + 1] = function(_newT)
                 pcall(function() _qb.qaScroll.ScrollBarImageColor3 = P.panelBrd end)
                 pcall(function() if _qb._qaBarStroke then _qb._qaBarStroke.Color = P.panelBrd end end)
-                pcall(function() if _qb._tgtBadgeStroke then _qb._tgtBadgeStroke.Color = (_qb.C and _qb.C.accent2) end end)
+                pcall(function() if _qb._tgtBadgeStroke then _qb._tgtBadgeStroke.Color = QC.accent end end)
                 pcall(function() if _qb._footStroke then _qb._footStroke.Color = P.footBrd end end)
                 pcall(function() if _qb._stopBtnStroke then _qb._stopBtnStroke.Color = P.stopBrd end end)
                 pcall(function() if tgtDot then tgtDot.BackgroundColor3 = P.tgtDot end end)
@@ -1181,6 +1360,11 @@ function M.cleanupQABar()
     if _qb.qaBar then
         pcall(function() _qb.qaBar:Destroy() end)
         _qb.qaBar = nil
+    end
+
+    if _qb.qaGlow then
+        pcall(function() _qb.qaGlow:Destroy() end)
+        _qb.qaGlow = nil
     end
 
     _qb.qaCardRefs = {}
