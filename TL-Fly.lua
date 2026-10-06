@@ -2,11 +2,16 @@ local GLOBAL_ENV = (typeof(getgenv) == "function" and getgenv()) or _G
 local RUNTIME_KEY = "__TL_FlyRuntime"
 
 local prev = GLOBAL_ENV and GLOBAL_ENV[RUNTIME_KEY]
-if type(prev) == "table" and type(prev.cleanup) == "function" then pcall(prev.cleanup) end
+if type(prev) == "table" then
+    if type(prev.stop) == "function" then pcall(prev.stop) end       -- laufenden Fly zuerst beenden (auch alte Versionen)
+    if type(prev.cleanup) == "function" then pcall(prev.cleanup) end
+end
 
 local runtime = { connections = {}, instances = {}, destroyed = false }
 runtime.cleanup = function()
-    if runtime.destroyed then return end; runtime.destroyed = true
+    if runtime.destroyed then return end
+    if type(runtime.stop) == "function" then pcall(runtime.stop) end -- Fly beenden, bevor Connections/GUI zerstoert werden
+    runtime.destroyed = true
     for _, c in ipairs(runtime.connections) do pcall(function() c:Disconnect() end) end
     runtime.connections = {}
     for i = #runtime.instances, 1, -1 do
@@ -925,6 +930,7 @@ local function startFly()
 
     while flying do
         local dt = RunService.Heartbeat:Wait()
+        if not flying then break end
         if dt > 0.1 then dt = 0.016 end
         driftTime = driftTime + dt
         local cam = Camera.CFrame
@@ -1231,6 +1237,10 @@ local function startFly()
 
     
     if psConn then psConn:Disconnect() end
+    if _prevNoclipFly then
+        for _, p in ipairs(_flyNoclipParts) do pcall(function() p.CanCollide = true end) end
+        _flyNoclipParts = {}
+    end
     local _fadeOut = 0.3 + (1 - math.clamp(_currentSpeedMag / math.max(_currentMaxSpeed, 1), 0, 1)) * 0.2
     if flyTrack then flyTrack:Stop(_fadeOut) end
     if flyFwdTrack then flyFwdTrack:Stop(_fadeOut) end
