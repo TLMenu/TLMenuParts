@@ -1,24 +1,23 @@
 --!nocheck
---[[
-╔══════════════════════════════════════════════════════════════════════════════════════╗
-║                                TL ENGINE // ASSET CHECKER                            ║
-║                                  Version: 2.1.0 Enterprise                           ║
-║                                                                                      ║
-║  Zweck:                                                                              ║
-║  - Automatische Überprüfung aller Menu- & Theme-Assets auf Gültigkeit & Frische      ║
-║  - Automatisches REPLACEN veralteter Assets im Workspace (ohne manuelles Löschen!)   ║
-║  - Erkennung beschädigter/korrupter Bilder (0-Byte, HTML/404 Fehler, falscher Header) ║
-║  - Prominente Auflistung defekter Assets in der F9 Konsole zur schnellen Reparatur   ║
-║  - Zuverlässiges Laden, Cachen und Anwenden von Bildern im Roblox GUI                ║
-╚══════════════════════════════════════════════════════════════════════════════════════╝
---]]
+local _genv = (getgenv and getgenv()) or _G
+
+-- ══════════════════════════════════════════════════════════════════════════════════════
+-- 0. SINGLE-EXECUTION GUARD (Die Engine läuft nur EINMAL pro Session)
+-- ══════════════════════════════════════════════════════════════════════════════════════
+if type(_genv) == "table" and rawget(_genv, "TL_ENGINE_ACTIVE") then
+    local _existing = rawget(_genv, "TLAssetChecker")
+    if _existing ~= nil then
+        return _existing
+    end
+end
+if type(_genv) == "table" then
+    rawset(_genv, "TL_ENGINE_ACTIVE", true)
+end
 
 local ContentProvider = game:GetService("ContentProvider")
 local HttpService     = game:GetService("HttpService")
 local RunService      = game:GetService("RunService")
 local Players         = game:GetService("Players")
-
-local _genv = (getgenv and getgenv()) or _G
 
 -- ══════════════════════════════════════════════════════════════════════════════════════
 -- 1. EXPLOIT & FILESYSTEM COMPATIBILITY LAYER
@@ -125,17 +124,17 @@ end
 -- ══════════════════════════════════════════════════════════════════════════════════════
 
 local TLAssetChecker = {
-    Version = "2.1.0",
-    BuildId = "2026.10.TL_ENGINE_V2",
+    Version = "2.2.0",
+    BuildId = "2026.10.TL_ENGINE_V3",
     StateFilePath = "assets/.tl_asset_state.json",
 
     Config = {
         AutoReplaceOutdated = true,   -- Veraltete Dateien automatisch aus dem Workspace ersetzen
         AutoRepairBroken    = true,   -- Defekte Dateien automatisch versuchen neu zu laden
         LogToConsole        = true,   -- Detaillierte F9 Konsolenausgabe
-        DeepImagePreload    = false,  -- Test-Rendering über ContentProvider:PreloadAsync
-        MaxConcurrent       = 4,      -- Parallele Downloads zur Geschwindigkeitsoptimierung
-        ThrottleDelay       = 0.03,   -- Schutz vor GitHub Rate-Limits (Task wait)
+        DeepImagePreload    = false,  -- Zusätzlicher Rendering-Test via ContentProvider:PreloadAsync
+        MaxConcurrent       = 4,      -- Parallele Downloads (GH-Assets kommen in Wellen statt sequenziell)
+        ThrottleDelay       = 0.03,   -- Pause zwischen Download-Starts (GitHub Rate-Limit-Schutz)
     },
 
     -- Status-Speicher für Prüfungen
@@ -149,7 +148,8 @@ local TLAssetChecker = {
         MissingCreated  = {},
     },
 
-    RegisteredAssets = {}
+    RegisteredAssets = {},
+    _scanning        = false,
 }
 
 -- ══════════════════════════════════════════════════════════════════════════════════════
@@ -410,6 +410,10 @@ end
 -- 6. DOWNLOAD, AUTO-REPLACE & AUTO-REPAIR
 -- ══════════════════════════════════════════════════════════════════════════════════════
 
+-- Auflösungs-Cache: verhindert wiederholte Datei-Scans & Reparatur-Downloads bei jedem GetAsset-Aufruf
+local _assetResolveCache = {}
+local _repairInFlight    = {}
+
 local function _ensureDirectory(path)
     local dir = path:match("^(.+/)") or ""
     if dir == "" then return true end
@@ -454,7 +458,43 @@ function TLAssetChecker:InstallOrReplace(entry, freshBytes, reason)
     if not ok then
         return false, "writefile fehlgeschlagen (Rechteproblem im Executor?)"
     end
+    _assetResolveCache[entry.file] = nil
     return true, "Erfolgreich gespeichert (" .. reason .. ")"
+end
+
+-- Führt Jobs in Gruppen mit MaxConcurrent parallel aus (statt sequenziell mit Endlos-Wartezeit)
+function TLAssetChecker:_RunJobsParallel(jobs, worker)
+    local total = #jobs
+    if total == 0 then return end
+    local concurrency = math.max(1, math.min(self.Config.MaxConcurrent or 1, total))
+
+    if type(task) ~= "table" or type(task.spawn) ~= "function" then
+        for i = 1, total do pcall(worker, jobs[i]) end
+        return
+    end
+
+    local canJoin = (type(task.join) == "function")
+    for chunkStart = 1, total, concurrency do
+        local threads = {}
+        local chunkEnd = math.min(chunkStart + concurrency - 1, total)
+        for i = chunkStart, chunkEnd do
+            local job = jobs[i]
+            threads[#threads + 1] = task.spawn(function()
+                pcall(worker, job)
+            end)
+        end
+        if canJoin then
+            for _, thread in ipairs(threads) do
+                pcall(task.join, thread)
+            end
+        else
+            -- Fallback: grobe Wartezeit solange die Gruppe braucht
+            task.wait(self.Config.ThrottleDelay * 5 + 0.5)
+        end
+        if chunkStart + concurrency <= total and self.Config.ThrottleDelay > 0 then
+            task.wait(self.Config.ThrottleDelay)
+        end
+    end
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════════
@@ -462,10 +502,29 @@ end
 -- ══════════════════════════════════════════════════════════════════════════════════════
 
 function TLAssetChecker:CheckAll(options)
+    -- Reentrance-Guard: nie zwei Scans gleichzeitig, keine wiederholten Dauer-Scans
+    if self._scanning then
+        if self.Config.LogToConsole then
+            print("[TL-CHECKER] Scan läuft bereits – wiederholter Aufruf wird übersprungen.")
+        end
+        return self.Diagnostics
+    end
+    self._scanning = true
+    local okRun, scanResult = pcall(self._CheckAllImpl, self, options)
+    self._scanning = false
+    if not okRun then
+        warn("[TL-CHECKER] Scan fehlgeschlagen: " .. tostring(scanResult))
+        return self.Diagnostics
+    end
+    return scanResult
+end
+
+function TLAssetChecker:_CheckAllImpl(options)
     options = options or {}
     local autoReplace = (options.autoReplace ~= nil) and options.autoReplace or self.Config.AutoReplaceOutdated
     local autoRepair  = (options.autoRepair ~= nil) and options.autoRepair or self.Config.AutoRepairBroken
     local forceSync   = options.forceSync or false
+    local scanStart   = tick()
 
     -- Reset Diagnostics
     self.Diagnostics = {
@@ -486,19 +545,17 @@ function TLAssetChecker:CheckAll(options)
     end
 
     if self.Config.LogToConsole then
-        print([[
-
-╔══════════════════════════════════════════════════════════════════════════════════════╗
-║                          TL ENGINE: ASSET CHECKER v2.1.0                             ║
-║                       Roblox Executor Health & Sync Diagnostic                       ║
-╚══════════════════════════════════════════════════════════════════════════════════════╝]])
-        print(string.format("[TL-CHECKER] Starte Asset-Prüfung für %d registrierte Assets...", #assetsToScan))
+        print(string.format("[TL-CHECKER] TL ENGINE ASSET CHECKER v%s", self.Version))
+        print(string.format("[TL-CHECKER] Phase 1/2: Lokaler Scan von %d Assets (ohne Netzwerk, ohne Wartezeit)...", #assetsToScan))
         if forceSync then
             print("[TL-CHECKER] [MODUS] FORCE-SYNC AKTIVIERT: Alle lokalen Assets werden aktualisiert.")
         end
     end
 
-    for idx, entry in ipairs(assetsToScan) do
+    -- PHASE 1: Nur lokale Validierung – kein Netzverkehr, keine Throttle-Pausen
+    local downloadQueue = {}
+
+    for _, entry in ipairs(assetsToScan) do
         self.Diagnostics.TotalScanned = self.Diagnostics.TotalScanned + 1
         local normalizedUrl = _normalizeUrl(entry.url)
         local isHealthy, statusType, statusMsg, localBytes = self:ValidateLocalFile(entry)
@@ -512,91 +569,30 @@ function TLAssetChecker:CheckAll(options)
             outdatedReason = "URL wurde im Script aktualisiert (alt: " .. cachedMeta.url:sub(1, 30) .. "...)"
         end
 
-        -- 2. Prüfen ob BuildId oder Force-Sync anliegt
+        -- 2. Prüfen ob Force-Sync anliegt
         if forceSync then
             isOutdated = true
             outdatedReason = "Erzwungener Force-Sync durch Benutzer/Entwickler"
         end
 
-        -- Fall A: Datei ist beschädigt oder korrupt
+        -- Fall A: Datei ist beschädigt oder korrupt -> Reparatur-Download einreihen
         if not isHealthy and statusType ~= "MISSING" then
             table.insert(self.Diagnostics.BrokenDamaged, {
                 entry = entry,
                 error = statusMsg,
                 type = statusType
             })
-
             if autoRepair then
-                local freshBytes, dlErr = self:DownloadAsset(entry)
-                if freshBytes then
-                    local installed, instErr = self:InstallOrReplace(entry, freshBytes, "Defektes Asset repariert")
-                    if installed then
-                        state.assets[entry.file] = {
-                            url = normalizedUrl,
-                            size = #freshBytes,
-                            checksum = _computeChecksum(freshBytes),
-                            updatedAt = os.time and os.time() or tick()
-                        }
-                        table.insert(self.Diagnostics.Repaired, {
-                            entry = entry,
-                            oldError = statusMsg
-                        })
-                    else
-                        table.insert(self.Diagnostics.RemoteDead, {
-                            entry = entry,
-                            reason = instErr
-                        })
-                    end
-                else
-                    table.insert(self.Diagnostics.RemoteDead, {
-                        entry = entry,
-                        reason = dlErr or "Download fehlgeschlagen"
-                    })
-                end
+                downloadQueue[#downloadQueue + 1] = { entry = entry, url = normalizedUrl, mode = "repair", reason = statusMsg }
             end
 
-        -- Fall B: Datei fehlt komplett im Workspace
+        -- Fall B: Datei fehlt komplett -> Download einreihen
         elseif statusType == "MISSING" then
-            local freshBytes, dlErr = self:DownloadAsset(entry)
-            if freshBytes then
-                local installed, instErr = self:InstallOrReplace(entry, freshBytes, "Erstmaliger Download")
-                if installed then
-                    state.assets[entry.file] = {
-                        url = normalizedUrl,
-                        size = #freshBytes,
-                        checksum = _computeChecksum(freshBytes),
-                        updatedAt = os.time and os.time() or tick()
-                    }
-                    table.insert(self.Diagnostics.MissingCreated, entry)
-                end
-            else
-                table.insert(self.Diagnostics.RemoteDead, {
-                    entry = entry,
-                    reason = "Fehlt lokal & Remote nicht erreichbar: " .. tostring(dlErr)
-                })
-            end
+            downloadQueue[#downloadQueue + 1] = { entry = entry, url = normalizedUrl, mode = "missing" }
 
-        -- Fall C: Datei ist lokal vorhanden, aber VERALTET
+        -- Fall C: Datei ist lokal vorhanden, aber VERALTET -> Replace einreihen
         elseif isOutdated and autoReplace then
-            local freshBytes, dlErr = self:DownloadAsset(entry)
-            if freshBytes then
-                local installed, instErr = self:InstallOrReplace(entry, freshBytes, "Outdated Replace")
-                if installed then
-                    state.assets[entry.file] = {
-                        url = normalizedUrl,
-                        size = #freshBytes,
-                        checksum = _computeChecksum(freshBytes),
-                        updatedAt = os.time and os.time() or tick()
-                    }
-                    table.insert(self.Diagnostics.Replaced, {
-                        entry = entry,
-                        reason = outdatedReason
-                    })
-                end
-            else
-                -- Falls GitHub nicht erreichbar ist, behalten wir die gesunde lokale Datei
-                self.Diagnostics.ValidHealthy = self.Diagnostics.ValidHealthy + 1
-            end
+            downloadQueue[#downloadQueue + 1] = { entry = entry, url = normalizedUrl, mode = "outdated", reason = outdatedReason }
 
         -- Fall D: Datei ist gesund und aktuell
         else
@@ -610,14 +606,96 @@ function TLAssetChecker:CheckAll(options)
                 }
             end
         end
+    end
 
-        if idx % 5 == 0 then
-            task.wait(self.Config.ThrottleDelay)
+    -- PHASE 2: Netzwerk-Teile parallel laden (MaxConcurrent) statt sequenziell mit Dauer-Warten
+    if #downloadQueue > 0 then
+        if self.Config.LogToConsole then
+            print(string.format("[TL-CHECKER] Phase 2/2: %d Download(s)/Reparatur(en), parallelisiert (x%d)...",
+                #downloadQueue, math.max(1, self.Config.MaxConcurrent or 1)))
+        end
+
+        self:_RunJobsParallel(downloadQueue, function(job)
+            local entry = job.entry
+            local freshBytes, dlErr = self:DownloadAsset(entry)
+
+            if not freshBytes then
+                if job.mode == "outdated" then
+                    -- GitHub nicht erreichbar: gesunde lokale Datei behalten
+                    self.Diagnostics.ValidHealthy = self.Diagnostics.ValidHealthy + 1
+                else
+                    table.insert(self.Diagnostics.RemoteDead, {
+                        entry = entry,
+                        reason = (job.mode == "missing")
+                            and ("Fehlt lokal & Remote nicht erreichbar: " .. tostring(dlErr))
+                            or  tostring(dlErr or "Download fehlgeschlagen")
+                    })
+                end
+                return
+            end
+
+            local replaceReason = (job.mode == "repair") and "Defektes Asset repariert"
+                or (job.mode == "outdated") and "Outdated Replace"
+                or "Erstmaliger Download"
+
+            local installed, instErr = self:InstallOrReplace(entry, freshBytes, replaceReason)
+            if not installed then
+                table.insert(self.Diagnostics.RemoteDead, { entry = entry, reason = instErr })
+                return
+            end
+
+            state.assets[entry.file] = {
+                url = job.url,
+                size = #freshBytes,
+                checksum = _computeChecksum(freshBytes),
+                updatedAt = os.time and os.time() or tick()
+            }
+
+            if job.mode == "repair" then
+                table.insert(self.Diagnostics.Repaired, { entry = entry, oldError = job.reason })
+            elseif job.mode == "missing" then
+                table.insert(self.Diagnostics.MissingCreated, entry)
+            else
+                table.insert(self.Diagnostics.Replaced, { entry = entry, reason = job.reason })
+            end
+        end)
+    end
+
+    -- PHASE 3 (optional): Tiefen-Rendering-Scan – erkennt Bilder, die Roblox nicht laden kann
+    if self.Config.DeepImagePreload then
+        local preloadList, preloadMap = {}, {}
+        for _, entry in ipairs(assetsToScan) do
+            if entry.kind == "image" and _safeIsFile(entry.file) then
+                local assetId = _safeGetCustomAsset(entry.file)
+                if assetId and assetId ~= "" then
+                    preloadList[#preloadList + 1] = assetId
+                    preloadMap[assetId] = entry
+                end
+            end
+        end
+        if #preloadList > 0 then
+            pcall(function()
+                ContentProvider:PreloadAsync(preloadList, function(contentId, status)
+                    if status ~= Enum.AssetFetchStatus.Success then
+                        local failedEntry = preloadMap[contentId]
+                        if failedEntry then
+                            table.insert(self.Diagnostics.BrokenDamaged, {
+                                entry = failedEntry,
+                                error = "Rendering-Check fehlgeschlagen: " .. tostring(status),
+                                type = "PRELOAD_FAILED"
+                            })
+                        end
+                    end
+                end)
+            end)
         end
     end
 
     self:SaveState(state)
     self:PrintDiagnosticReport()
+    if self.Config.LogToConsole then
+        print(string.format("[TL-CHECKER] Scan abgeschlossen in %.2fs.", tick() - scanStart))
+    end
     return self.Diagnostics
 end
 
@@ -707,30 +785,38 @@ end
 -- 9. PUBLIC API & GUI HELPER METHODEN
 -- ══════════════════════════════════════════════════════════════════════════════════════
 
--- Lädt ein Asset sicher als rbxasset oder URL. Bei Defekt wird eine Reparatur versucht!
+-- Lädt ein Asset sicher als rbxasset oder URL. Ergebnis wird gecacht -> kein Dauer-Scan,
+-- kein wiederholter Reparatur-Download pro Aufruf.
 function TLAssetChecker:GetAsset(filePath, fallbackUrl)
     if not filePath then return fallbackUrl or "" end
 
-    local localOk = _safeIsFile(filePath)
-    if localOk then
+    local cached = _assetResolveCache[filePath]
+    if cached then return cached end
+
+    if _safeIsFile(filePath) then
         local content = _safeReadFile(filePath)
         if content and #content > 0 then
             local assetId = _safeGetCustomAsset(filePath)
             if assetId and assetId ~= "" then
+                _assetResolveCache[filePath] = assetId
                 return assetId
             end
         end
     end
 
-    -- Falls Datei fehlt oder kaputt ist: Versuche Asset zu finden und nachzuladen
+    -- Lokal kaputt oder fehlend: genau EIN Reparatur-Download pro Datei anstoßen
     for _, item in ipairs(MASTER_ASSETS) do
         if item.file == filePath then
-            task.spawn(function()
-                local freshBytes = self:DownloadAsset(item)
-                if freshBytes then
-                    self:InstallOrReplace(item, freshBytes, "OnDemand AutoRepair")
-                end
-            end)
+            if not _repairInFlight[filePath] then
+                _repairInFlight[filePath] = true
+                task.spawn(function()
+                    local freshBytes = self:DownloadAsset(item)
+                    if freshBytes then
+                        self:InstallOrReplace(item, freshBytes, "OnDemand AutoRepair")
+                    end
+                    _repairInFlight[filePath] = nil
+                end)
+            end
             return item.url or fallbackUrl or ""
         end
     end
