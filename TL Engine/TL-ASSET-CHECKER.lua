@@ -1,4 +1,5 @@
 --!nocheck
+
 local _genv = (getgenv and getgenv()) or _G
 
 -- ══════════════════════════════════════════════════════════════════════════════════════
@@ -200,15 +201,9 @@ local MASTER_ASSETS = {
     { category = "TL-DEFAULT", name = "Playerlist Tab Icon",    kind = "image", file = "assets/TL-DEFAULT/Playerlist-Icon.png",         url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/main/TL-DEFAULT/Playerlist-Icon.png" },
 
     -- ── ROLES & AVATARS ─────────────────────────────────────────────────────────────
-    { category = "ROLES", name = "TL Owner Profile Picture",    kind = "image", file = "assets/TL-ROLE-PICS/TL-telelumi.png",          url = "https://raw.githubusercontent.com/TLMenu/TLMenu.github.io/refs/heads/main/NAMETAG-PROFILEPICTURES/TL-telelumi.png" },
     { category = "ROLES", name = "TL User Profile Picture",     kind = "image", file = "assets/ROLE-ICONS/TLUSER-ROLE.png",             url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/main/ROLE-ICONS/TLUSER-ROLE.png" },
-    { category = "ROLES", name = "usxirr Custom Avatar",        kind = "image", file = "assets/TL-ROLE-PICS/TL-Usxirr.png",             url = "https://raw.githubusercontent.com/TLMenu/TLMenu.github.io/refs/heads/main/NAMETAG-PROFILEPICTURES/TL-Oso.png" },
     { category = "ROLES", name = "Abxsent0 Custom Avatar",      kind = "image", file = "assets/ROLE-ICONS/TL-Abxsent0.png",             url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/main/ROLE-ICONS/TL-Abxsent0.png" },
     { category = "ROLES", name = "TL Staff Icon",               kind = "image", file = "assets/ROLE-ICONS/TL-STAFF.png",                url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/main/ROLE-ICONS/TL-STAFF.png" },
-    { category = "ROLES", name = "TL Arda Avatar",              kind = "image", file = "assets/TL-ROLE-PICS/TL-Arda.png",               url = "https://raw.githubusercontent.com/TLMenu/TLMenu.github.io/refs/heads/main/NAMETAG-PROFILEPICTURES/TL-Arda.png" },
-    { category = "ROLES", name = "TL Sec Avatar",               kind = "image", file = "assets/TL-ROLE-PICS/TL-Sec.png",                url = "https://raw.githubusercontent.com/TLMenu/TLMenu.github.io/refs/heads/main/NAMETAG-PROFILEPICTURES/TL-Sec.png" },
-    { category = "ROLES", name = "TL Sleepy Avatar",            kind = "image", file = "assets/TL-ROLE-PICS/TL-Sleepy.jpg",             url = "https://raw.githubusercontent.com/TLMenu/TLMenu.github.io/refs/heads/main/NAMETAG-PROFILEPICTURES/TL-Sleepy.jpg" },
-    { category = "ROLES", name = "R5yn Avatar",                 kind = "image", file = "assets/TL-ROLE-PICS/R5yn.png",                  url = "https://raw.githubusercontent.com/TLMenu/TLMenu.github.io/refs/heads/main/NAMETAG-PROFILEPICTURES/R5yn.png" },
     { category = "ROLES", name = "Nametag Image",               kind = "image", file = "assets/TL-ROLE-PICS/nametag-image.png",         url = "https://raw.githubusercontent.com/TLMenu/TLMenu.github.io/refs/heads/main/nametag-uploads/nametag-image.png" },
 
     -- ── DRAGONBALL THEME ─────────────────────────────────────────────────────────────
@@ -220,15 +215,15 @@ local MASTER_ASSETS = {
     { category = "DRAGONBALL", name = "Settings Icon",          kind = "image", file = "assets/THEMES/DRAGONBALL/Theme-Dragonball-Settings-Icon.png",   url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/DRAGONBALL/Theme-Dragonball-Settings-Icon.png" },
     { category = "DRAGONBALL", name = "Wallpaper (Home BG)",    kind = "image", file = "assets/THEMES/DRAGONBALL/Theme-Dragonball-Home-Wallpaper.png",   url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/DRAGONBALL/Theme-Dragonball-Home-Wallpaper.png" },
     { category = "DRAGONBALL", name = "Theme Music",            kind = "audio", file = "assets/TL-MP3-FILES/DRAGONBALL/DRAGONBALL-THEME-MUSIC-1.mp3",  url = "https://github.com/TLMenu/TLASSETS/raw/main/TL-MP3/THEME-MP3/THEME-MUSIC/DRAGONBALL/DRAGONBALL-THEME-MUSIC-1.mp3" },
-    { category = "DRAGONBALL", name = "AFK Voiceline 1",        kind = "audio", file = "assets/TL-MP3-FILES/DB-AFK-VL0.mp3",                            url = "https://github.com/TLMenu/TLASSETS/raw/main/TL%20SFX/AFKSFX/DRAGONBALL-AFKSFX/DRAGONBALL-AFK-VOICELINE.mp3" },
-    { category = "DRAGONBALL", name = "AFK Voiceline 2",        kind = "audio", file = "assets/TL-MP3-FILES/DB-AFK-VL1.mp3",                            url = "https://github.com/TLMenu/TLASSETS/raw/main/TL%20SFX/AFKSFX/DRAGONBALL-AFKSFX/DRAGONBALL-AFK-VOICELINE1.mp3" },
+    { category = "DRAGONBALL", name = "AFK Voiceline 1",        kind = "audio", file = "assets/TL-MP3-FILES/DB-AFK-VL0.mp3",                            url = "https://github.com/TLMenu/TLASSETS/raw/refs/heads/main/TL-MP3/THEME-MP3/DRAGONBALL-AFKSFX/DRAGONBALL-AFK-VOICELINE.mp3" },
+    { category = "DRAGONBALL", name = "AFK Voiceline 2",        kind = "audio", file = "assets/TL-MP3-FILES/DB-AFK-VL1.mp3",                            url = "https://github.com/TLMenu/TLASSETS/raw/refs/heads/main/TL-MP3/THEME-MP3/DRAGONBALL-AFKSFX/DRAGONBALL-AFK-VOICELINE1.mp3" },
 
     -- ── THE BOYS THEME ───────────────────────────────────────────────────────────────
     { category = "THE BOYS", name = "Scripts Icon",             kind = "image", file = "assets/THEMES/THEBOYS/Theme-TheBoys-Scripts-Icon.png",  url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/THE%20BOYS/Theme-TheBoys-Scripts-Icon.png" },
     { category = "THE BOYS", name = "Settings Icon",            kind = "image", file = "assets/THEMES/THEBOYS/Theme-TheBoys-Settings-Icon.png", url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/THE%20BOYS/Theme-TheBoys-Settings-Icon.png" },
     { category = "THE BOYS", name = "Home Icon",                kind = "image", file = "assets/THEMES/THEBOYS/Theme-TheBoys-HomeIcon.png",      url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/THE%20BOYS/Theme-TheBoys-HomeIcon.png" },
     { category = "THE BOYS", name = "Actions Icon",             kind = "image", file = "assets/THEMES/THEBOYS/Theme-TheBoys-Actions-Icon.png",   url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/THE%20BOYS/Theme-TheBoys-Actions-Icon.png" },
-    { category = "THE BOYS", name = "Wallpaper (Home BG)",      kind = "image", file = "assets/THEMES/THEBOYS/Theme-TheBoys2.jpg",              url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/main/THEMES/THE%20BOYS/Theme-TheBoys2.jpg" },
+    { category = "THE BOYS", name = "Wallpaper (Home BG)",      kind = "image", file = "assets/THEMES/THEBOYS/Theme-TheBoys-HomePanel-Background.png", url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/THE%20BOYS/Theme-TheBoys-HomePanel-Background.png" },
     { category = "THE BOYS", name = "Theme Music",              kind = "audio", file = "assets/TL-MP3-FILES/THEBOYS/Theme-TheBoys-Music.mp3",   url = "https://github.com/TLMenu/TLASSETS/raw/main/TL-MP3/THEME-MP3/THEME-MUSIC/THEBOYS/The%20Boys%20Homelander%20Theme%20Enhanced%20Version.mp3" },
     { category = "THE BOYS", name = "AFK Voiceline",            kind = "audio", file = "assets/TL-MP3-FILES/TB-AFK-VL0.mp3",                    url = "https://github.com/TLMenu/TLASSETS/raw/main/TL-MP3/THEME-MP3/THEBOYS-AFKSFX/THEBOYS-AFK-VOICELINE.mp3" },
 
@@ -241,7 +236,7 @@ local MASTER_ASSETS = {
     { category = "ONE PIECE", name = "Loading Screen",          kind = "image", file = "assets/THEMES/ONEPIECE/Theme-OnePiece-Loading-Screen.png",       url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/ONE%20PIECE/Theme-OnePiece-Loading-Screen.png" },
     { category = "ONE PIECE", name = "Playerlist Icon",         kind = "image", file = "assets/THEMES/ONEPIECE/Theme-OnePiece-Playerlist-Icon.png",      url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/ONE%20PIECE/Theme-OnePiece-Playerlist-Icon.png" },
     { category = "ONE PIECE", name = "Playerlist Wallpaper",    kind = "image", file = "assets/THEMES/ONEPIECE/Theme-Onepiece-Playerlist-Wallpaper.png", url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/ONE%20PIECE/Theme-Onepiece-Playerlist-Wallpaper.png" },
-    { category = "ONE PIECE", name = "Action Wallpaper",        kind = "image", file = "assets/THEMES/ONEPIECE/Theme-OnePiece-Action-Wallpaper.png",     url = "https://github.com/TLMenu/TLASSETS/raw/main/THEMES/ONE%20PIECE/Theme-OnePiece-Action-Wallpaper.png" },
+    { category = "ONE PIECE", name = "Action Wallpaper",        kind = "image", file = "assets/THEMES/ONEPIECE/Theme-OnePiece-Action-Wallpaper.png",     url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/ONE%20PIECE/Theme-OnePiece-Action-Wallpaper.png" },
     { category = "ONE PIECE", name = "COM Wallpaper",           kind = "image", file = "assets/THEMES/Theme-OnePiece-Com-Wallpaper.png",                 url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/ONE%20PIECE/Theme-OnePiece-Com-Wallpaper.png" },
     { category = "ONE PIECE", name = "AFK Voiceline 1",         kind = "audio", file = "assets/TL-MP3-FILES/ONEPIECE-AFK-VOICELINE.mp3",                 url = "https://github.com/TLMenu/TLASSETS/raw/main/TL-MP3/THEME-MP3/ONEPIECE-AFKSFX/ONEPIECE-AFK-VOICELINE.mp3" },
     { category = "ONE PIECE", name = "AFK Voiceline 2",         kind = "audio", file = "assets/TL-MP3-FILES/ONEPIECE-AFK-VOICELINE1.mp3",                url = "https://github.com/TLMenu/TLASSETS/raw/main/TL-MP3/THEME-MP3/ONEPIECE-AFKSFX/ONEPIECE-AFK-VOICELINE1.mp3" },
@@ -278,7 +273,7 @@ local MASTER_ASSETS = {
     { category = "DEXTER", name = "Character Panel BG",        kind = "image", file = "assets/THEMES/DEXTER/Theme-Dexter-CharacterPanel.png",     url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/DEXTER/Theme-Dexter-CharacterPanel.png" },
     { category = "DEXTER", name = "Scripts Icon",              kind = "image", file = "assets/THEMES/DEXTER/Theme-Dexter-Scripts-Icon.png",       url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/DEXTER/Theme-Dexter-Scripts-Icon.png" },
     { category = "DEXTER", name = "Com Wallpaper",             kind = "image", file = "assets/THEMES/DEXTER/Theme-Dexter-ComWallpaper.png",      url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/DEXTER/Theme-Dexter-Com-Wallpaper.png" },
-    { category = "DEXTER", name = "Loading Screen",            kind = "image", file = "assets/THEMES/DEXTER/Theme-Dexter-LoadingScreen.png",     url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/main/THEMES/DEXTER/Theme-Dexter-Loading-Screen.png" },
+    { category = "DEXTER", name = "Loading Screen",            kind = "image", file = "assets/THEMES/DEXTER/Theme-Dexter-LoadingScreen.png",     url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/DEXTER/Theme-Dexter-Loading-Screen.png" },
     { category = "DEXTER", name = "Playerlist Icon",           kind = "image", file = "assets/THEMES/DEXTER/Theme-Dexter-Playerlist-Icon.png",    url = "https://raw.githubusercontent.com/TLMenu/TLASSETS/refs/heads/main/DEXTER/Theme-Dexter-Playerlist-Icon.png" },
 
     -- ── SFX & AUDIO ──────────────────────────────────────────────────────────────────
