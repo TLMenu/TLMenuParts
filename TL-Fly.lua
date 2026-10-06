@@ -189,29 +189,41 @@ Wrapper.Draggable = false
 Wrapper.Parent = flyScreenGui
 Wrapper.Visible = false
 
+local BAR_FALLBACK = Color3.fromRGB(8, 8, 14)
+
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(1, 0, 1, 0)
-MainFrame.BackgroundColor3 = Color3.fromRGB(12, 13, 19)
+MainFrame.BackgroundColor3 = BAR_FALLBACK
 MainFrame.BackgroundTransparency = 0.08
 MainFrame.BorderSizePixel = 0
 MainFrame.ZIndex = 2
 MainFrame.Parent = Wrapper
 corner(MainFrame, 14)
 
-local mGrad = Instance.new("UIGradient", MainFrame)
-mGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(24, 27, 38)),
-    ColorSequenceKeypoint.new(0.25, Color3.fromRGB(14, 15, 22)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(9, 10, 14))
-})
-mGrad.Rotation = 90
+-- Gradient oben (14,14,22) -> unten (4,4,8); Fallback (8,8,14) falls UIGradient fehlschlaegt
+local okGrad = pcall(function()
+    local mGrad = Instance.new("UIGradient")
+    mGrad.Color = ColorSequence.new(Color3.fromRGB(14, 14, 22), Color3.fromRGB(4, 4, 8))
+    mGrad.Rotation = 90
+    mGrad.Parent = MainFrame
+end)
+if okGrad then MainFrame.BackgroundColor3 = Color3.new(1, 1, 1) end -- Gradient wird multipliziert
 
+-- Stroke: Blau -> Cyan -> Gruen
 local mStroke = Instance.new("UIStroke", MainFrame)
 mStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-mStroke.Color = C.accent
+mStroke.Color = Color3.new(1, 1, 1)
 mStroke.Thickness = 1.3
 mStroke.Transparency = 0.35
+
+local mStrokeGrad = Instance.new("UIGradient", mStroke)
+mStrokeGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0,   Color3.fromRGB(0, 140, 255)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 230, 255)),
+    ColorSequenceKeypoint.new(1,   Color3.fromRGB(60, 255, 100)),
+})
+mStrokeGrad.Rotation = 0
 
 local ButtonContainer = Instance.new("Frame")
 ButtonContainer.Size = UDim2.new(1, 0, 1, 0)
@@ -231,6 +243,20 @@ local UIPad = Instance.new("UIPadding")
 UIPad.PaddingLeft = UDim.new(0, 10)
 UIPad.PaddingRight = UDim.new(0, 10)
 UIPad.Parent = ButtonContainer
+
+local function makeSeparator(order)
+    local sep = Instance.new("Frame")
+    sep.Name = "Separator"
+    sep.Size = UDim2.new(0, 1, 0, 20)
+    sep.BackgroundColor3 = Color3.fromRGB(90, 95, 120)
+    sep.BackgroundTransparency = 0.3
+    sep.BorderSizePixel = 0
+    sep.LayoutOrder = order
+    sep.ZIndex = 4
+    sep.Parent = ButtonContainer
+    return sep
+end
+makeSeparator(1); makeSeparator(3); makeSeparator(5); makeSeparator(7)
 
 -- -- 1. DRAG HANDLE --
 local DragHandle = Instance.new("TextButton")
@@ -315,7 +341,7 @@ InfoCont.Size = UDim2.new(0, 112, 0, 32)
 InfoCont.BackgroundColor3 = Color3.fromRGB(18, 20, 29)
 InfoCont.BackgroundTransparency = 0.2
 InfoCont.BorderSizePixel = 0
-InfoCont.LayoutOrder = 1
+InfoCont.LayoutOrder = 2
 InfoCont.ZIndex = 4
 InfoCont.Parent = ButtonContainer
 corner(InfoCont, 9)
@@ -351,7 +377,7 @@ Title.Position = UDim2.new(0, 18, 0, 0)
 Title.BackgroundTransparency = 1
 Title.Text = "TL FLY"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
-Title.Font = Enum.Font.GothamBold
+Title.Font = Enum.Font.GothamBlack
 Title.TextSize = 11
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.ZIndex = 5
@@ -359,8 +385,8 @@ Title.Parent = InfoCont
 
 local StatusBadge = Instance.new("Frame")
 StatusBadge.Name = "StatusBadge"
-StatusBadge.Size = UDim2.new(0, 40, 0, 18)
-StatusBadge.Position = UDim2.new(1, -44, 0.5, -9)
+StatusBadge.Size = UDim2.new(0, 44, 0, 18)
+StatusBadge.Position = UDim2.new(1, -48, 0.5, -9)
 StatusBadge.BackgroundColor3 = Color3.fromRGB(24, 30, 45)
 StatusBadge.BorderSizePixel = 0
 StatusBadge.ZIndex = 5
@@ -373,7 +399,7 @@ StatusLabel.Size = UDim2.new(1, 0, 1, 0)
 StatusLabel.BackgroundTransparency = 1
 StatusLabel.Text = "GLIDE"
 StatusLabel.TextColor3 = Color3.fromRGB(34, 211, 238)
-StatusLabel.Font = Enum.Font.GothamBold
+StatusLabel.Font = Enum.Font.GothamBlack
 StatusLabel.TextSize = 8
 StatusLabel.ZIndex = 6
 StatusLabel.Parent = StatusBadge
@@ -384,7 +410,7 @@ local function createButton(text, callback)
     btn.BackgroundColor3 = Color3.fromRGB(18, 20, 29)
     btn.BackgroundTransparency = 0.2
     btn.TextColor3 = Color3.fromRGB(220, 230, 245)
-    btn.Font = Enum.Font.GothamBold
+    btn.Font = Enum.Font.GothamBlack
     btn.TextSize = 10
     btn.Text = text
     btn.BorderSizePixel = 0
@@ -429,7 +455,7 @@ SpeedGroup.Size = UDim2.new(0, 134, 0, 32)
 SpeedGroup.BackgroundColor3 = Color3.fromRGB(18, 20, 29)
 SpeedGroup.BackgroundTransparency = 0.2
 SpeedGroup.BorderSizePixel = 0
-SpeedGroup.LayoutOrder = 2
+SpeedGroup.LayoutOrder = 4
 SpeedGroup.ZIndex = 4
 SpeedGroup.Parent = ButtonContainer
 corner(SpeedGroup, 9)
@@ -454,7 +480,7 @@ SpeedTitle.Position = UDim2.new(0, 10, 0, 4)
 SpeedTitle.BackgroundTransparency = 1
 SpeedTitle.Text = "NORMAL"
 SpeedTitle.TextColor3 = Color3.fromRGB(240, 245, 255)
-SpeedTitle.Font = Enum.Font.GothamBold
+SpeedTitle.Font = Enum.Font.GothamBlack
 SpeedTitle.TextSize = 10
 SpeedTitle.TextXAlignment = Enum.TextXAlignment.Left
 SpeedTitle.ZIndex = 5
@@ -466,7 +492,7 @@ KeyTag.Position = UDim2.new(1, -32, 0, 4)
 KeyTag.BackgroundTransparency = 1
 KeyTag.Text = "[Q]"
 KeyTag.TextColor3 = Color3.fromRGB(110, 115, 135)
-KeyTag.Font = Enum.Font.GothamBold
+KeyTag.Font = Enum.Font.GothamBlack
 KeyTag.TextSize = 8
 KeyTag.TextXAlignment = Enum.TextXAlignment.Right
 KeyTag.ZIndex = 5
@@ -519,7 +545,7 @@ local NoclipBtn, ncStroke = createButton("", function()
     updateFlyPanel()
 end)
 NoclipBtn.Size = UDim2.new(0, 106, 0, 32)
-NoclipBtn.LayoutOrder = 3
+NoclipBtn.LayoutOrder = 6
 NoclipBtn.Parent = ButtonContainer
 
 local ncLabel = Instance.new("TextLabel")
@@ -528,7 +554,7 @@ ncLabel.Position = UDim2.new(0, 10, 0, 0)
 ncLabel.BackgroundTransparency = 1
 ncLabel.Text = "NOCLIP"
 ncLabel.TextColor3 = Color3.fromRGB(220, 230, 245)
-ncLabel.Font = Enum.Font.GothamBold
+ncLabel.Font = Enum.Font.GothamBlack
 ncLabel.TextSize = 10
 ncLabel.TextXAlignment = Enum.TextXAlignment.Left
 ncLabel.ZIndex = 5
@@ -549,7 +575,7 @@ NcTagText.Size = UDim2.new(1, 0, 1, 0)
 NcTagText.BackgroundTransparency = 1
 NcTagText.Text = "OFF"
 NcTagText.TextColor3 = Color3.fromRGB(120, 125, 140)
-NcTagText.Font = Enum.Font.GothamBold
+NcTagText.Font = Enum.Font.GothamBlack
 NcTagText.TextSize = 8
 NcTagText.ZIndex = 6
 NcTagText.Parent = NcTag
@@ -557,7 +583,7 @@ NcTagText.Parent = NcTag
 -- -- 5. ANIMATION STYLE DROPDOWN BUTTON --
 local AnimBtn, animStroke = createButton("", function() end)
 AnimBtn.Size = UDim2.new(0, 154, 0, 32)
-AnimBtn.LayoutOrder = 4
+AnimBtn.LayoutOrder = 8
 AnimBtn.Parent = ButtonContainer
 
 local AnimPrefix = Instance.new("TextLabel")
@@ -566,7 +592,7 @@ AnimPrefix.Position = UDim2.new(0, 10, 0, 0)
 AnimPrefix.BackgroundTransparency = 1
 AnimPrefix.Text = "STYLE"
 AnimPrefix.TextColor3 = Color3.fromRGB(110, 115, 135)
-AnimPrefix.Font = Enum.Font.GothamBold
+AnimPrefix.Font = Enum.Font.GothamBlack
 AnimPrefix.TextSize = 8
 AnimPrefix.TextXAlignment = Enum.TextXAlignment.Left
 AnimPrefix.ZIndex = 5
@@ -579,7 +605,7 @@ AnimNameLabel.Position = UDim2.new(0, 44, 0, 0)
 AnimNameLabel.BackgroundTransparency = 1
 AnimNameLabel.Text = animSets[currentAnimSet].name:upper()
 AnimNameLabel.TextColor3 = Color3.fromRGB(240, 245, 255)
-AnimNameLabel.Font = Enum.Font.GothamBold
+AnimNameLabel.Font = Enum.Font.GothamBlack
 AnimNameLabel.TextSize = 10
 AnimNameLabel.TextXAlignment = Enum.TextXAlignment.Left
 AnimNameLabel.TextTruncate = Enum.TextTruncate.AtEnd
@@ -594,7 +620,7 @@ DropArrow.Position = UDim2.new(1, -12, 0.5, 0)
 DropArrow.BackgroundTransparency = 1
 DropArrow.Text = "v"
 DropArrow.TextColor3 = C.accent
-DropArrow.Font = Enum.Font.GothamBold
+DropArrow.Font = Enum.Font.GothamBlack
 DropArrow.TextSize = 10
 DropArrow.ZIndex = 5
 DropArrow.Parent = AnimBtn
@@ -606,7 +632,7 @@ local dropOpen = false
 local PillOuter = Instance.new("Frame")
 PillOuter.Size = UDim2.new(0, 160, 0, 0)
 PillOuter.AnchorPoint = Vector2.new(0.5, 0)
-PillOuter.Position = UDim2.new(0, 479, 0, 44 + PILL_GAP)
+PillOuter.Position = UDim2.new(0, 515, 0, 44 + PILL_GAP)
 PillOuter.BackgroundColor3 = Color3.fromRGB(12, 14, 20)
 PillOuter.BackgroundTransparency = 0.05
 PillOuter.BorderSizePixel = 0
@@ -634,7 +660,7 @@ PillTit.Position = UDim2.new(0, 12, 0, 0)
 PillTit.BackgroundTransparency = 1
 PillTit.Text = "FLYING STYLES"
 PillTit.TextColor3 = Color3.fromRGB(140, 150, 175)
-PillTit.Font = Enum.Font.GothamBold
+PillTit.Font = Enum.Font.GothamBlack
 PillTit.TextSize = 9
 PillTit.TextXAlignment = Enum.TextXAlignment.Left
 PillTit.ZIndex = 52
@@ -721,7 +747,7 @@ for i, set in ipairs(animSets) do
     nameLbl.BackgroundTransparency = 1
     nameLbl.Text = set.name
     nameLbl.TextColor3 = Color3.fromRGB(220, 230, 245)
-    nameLbl.Font = Enum.Font.GothamBold
+    nameLbl.Font = Enum.Font.GothamBlack
     nameLbl.TextSize = 10
     nameLbl.TextXAlignment = Enum.TextXAlignment.Left
     nameLbl.ZIndex = 54
@@ -804,7 +830,6 @@ updateFlyPanel = function()
         end
     end
     
-    TweenService:Create(mStroke, TweenInfo.new(0.25), { Color = data.color }):Play()
     TweenService:Create(pillStroke, TweenInfo.new(0.25), { Color = data.color }):Play()
 
     if NoclipBtn and NcTag and NcTagText then
